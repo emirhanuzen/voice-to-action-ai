@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice To Action - Web Dashboard Taslağı</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+                    },
+                    colors: {
+                        brand: {
+                            900: "#0b1220",
+                            800: "#101a31",
+                            700: "#182544",
+                            500: "#3b82f6",
+                            400: "#60a5fa"
+                        }
+                    },
+                    boxShadow: {
+                        soft: "0 12px 34px -18px rgba(15, 23, 42, 0.45)",
+                        panel: "0 22px 50px -26px rgba(15, 23, 42, 0.45)"
+                    }
+                }
+            }
+        };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="font-sans text-slate-700 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100">
+    <div class="flex h-screen overflow-hidden">
+        <aside class="hidden md:flex w-72 bg-gradient-to-b from-brand-900 via-brand-800 to-brand-700 text-slate-200 flex-col border-r border-slate-700/60 shadow-panel">
+            <div class="px-6 py-7 border-b border-slate-600/40">
+                <h1 class="text-2xl font-extrabold tracking-tight text-white">
+                    <i class="fa-solid fa-microphone-lines text-brand-400 mr-2"></i>VoiceToAction
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">AI Destekli Asistan</p>
+            </div>
+
+            <nav class="p-4 space-y-2">
+                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-white font-medium bg-gradient-to-r from-blue-600 to-indigo-600 shadow-soft border border-blue-400/20">
+                    <i class="fa-solid fa-chart-pie w-5 text-blue-100"></i>
+                    <span>Analiz Paneli</span>
+                </a>
+                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600/30 transition-all">
+                    <i class="fa-solid fa-folder-open w-5 text-slate-400 group-hover:text-slate-200"></i>
+                    <span>Tüm Kayıtlar</span>
+                </a>
+                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600/30 transition-all">
+                    <i class="fa-solid fa-check-double w-5 text-slate-400 group-hover:text-slate-200"></i>
+                    <span>Görevler</span>
+                </a>
+            </nav>
+
+            <div class="flex-1 px-4 mt-2">
+                <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.16em] mb-3 px-3">Kategoriler</p>
+                <nav class="space-y-1.5">
+                    <a href="#" class="flex items-center p-2.5 hover:bg-slate-600/25 rounded-xl text-slate-300 text-sm transition-all">
+                        <span class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-3"></span> Eğitim & Podcast
+                    </a>
+                    <a href="#" class="flex items-center p-2.5 hover:bg-slate-600/25 rounded-xl text-slate-300 text-sm transition-all">
+                        <span class="w-2.5 h-2.5 rounded-full bg-purple-500 mr-3"></span> İş & Toplantı
+                    </a>
+                    <a href="#" class="flex items-center p-2.5 hover:bg-slate-600/25 rounded-xl text-slate-300 text-sm transition-all">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 mr-3"></span> Gazeteci & Röportaj
+                    </a>
+                </nav>
+            </div>
+
+            <div class="p-4 border-t border-slate-600/40">
+                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600/30 transition-all">
+                    <i class="fa-solid fa-gear w-5 text-slate-400 group-hover:text-slate-200"></i>
+                    <span>Ayarlar</span>
+                </a>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col overflow-y-auto">
+            <header class="sticky top-0 z-10 backdrop-blur-xl bg-white/80 border-b border-slate-200/80 px-5 lg:px-8 py-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <button class="md:hidden mr-4 text-slate-500"><i class="fa-solid fa-bars text-xl"></i></button>
+                    <h2 class="text-xl font-bold text-slate-800 tracking-tight">Genel Bakış</h2>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="relative h-10 w-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:shadow-soft transition-all">
+                        <i class="fa-solid fa-bell"></i>
+                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full h-4 w-4 flex items-center justify-center font-semibold">3</span>
+                    </button>
+                    <button class="flex items-center gap-3 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:shadow-soft transition-all">
+                        <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 border border-blue-200 flex items-center justify-center text-blue-700 font-bold">
+                            EM
+                        </div>
+                        <div class="hidden sm:block text-left">
+                            <p class="text-sm font-semibold text-slate-800 leading-tight">Emirhan</p>
+                            <p class="text-xs text-slate-500 leading-tight">Yönetici</p>
+                        </div>
+                    </button>
+                </div>
+            </header>
+
+            <div class="p-5 lg:p-8 space-y-8">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+                    <div>
+                        <h3 class="text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight">Hoş geldin, Emirhan 👋</h3>
+                        <p class="text-slate-500 mt-1.5">Yapay zeka bu hafta kayıtlarından 12 yeni görev çıkardı.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                        <button class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-4 py-2.5 rounded-xl font-medium shadow-soft transition-all">
+                            <i class="fa-solid fa-file-video"></i> Videoyu Sese Çevir
+                        </button>
+                        <button class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white px-4 py-2.5 rounded-xl font-medium shadow-soft transition-all">
+                            <i class="fa-solid fa-microphone-lines"></i> Yeni Ses Kaydet
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="group bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80 hover:-translate-y-0.5 hover:shadow-panel transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-medium">Tamamlanan Görevler</p>
+                                <h4 class="text-3xl font-bold text-slate-800 mt-2">%75</h4>
+                            </div>
+                            <div class="bg-emerald-50 p-3 rounded-xl text-emerald-600 border border-emerald-100">
+                                <i class="fa-solid fa-chart-line text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-2 mt-4 overflow-hidden">
+                            <div class="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full" style="width: 75%"></div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-2">Geçen haftaya göre +%12 artış (Filter kullanıldı)</p>
+                    </div>
+
+                    <div class="group bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80 hover:-translate-y-0.5 hover:shadow-panel transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-medium">Toplam İşlenen Süre</p>
+                                <h4 class="text-3xl font-bold text-slate-800 mt-2">14<span class="text-lg text-slate-500 font-normal"> saat</span></h4>
+                            </div>
+                            <div class="bg-blue-50 p-3 rounded-xl text-blue-600 border border-blue-100">
+                                <i class="fa-solid fa-microphone text-xl"></i>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-6">Toplam 8 farklı kayıt analiz edildi (Reduce kullanıldı)</p>
+                    </div>
+
+                    <div class="group bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80 hover:-translate-y-0.5 hover:shadow-panel transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-medium">Yaklaşan Etkinlikler</p>
+                                <h4 class="text-3xl font-bold text-slate-800 mt-2">3</h4>
+                            </div>
+                            <div class="bg-violet-50 p-3 rounded-xl text-violet-600 border border-violet-100">
+                                <i class="fa-solid fa-calendar-day text-xl"></i>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-6">Yapay zeka tarafından metinden çıkarıldı</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                    <div class="bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80">
+                        <h4 class="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                            <i class="fa-solid fa-list-check text-blue-500 mr-2"></i> AI Tarafından Bulunan Görevler
+                        </h4>
+                        <div class="space-y-3">
+                            <div class="flex items-start p-3.5 hover:bg-slate-50 rounded-xl transition-all border border-slate-200/70 hover:border-blue-200">
+                                <input type="checkbox" class="mt-1 h-5 w-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                                <div class="ml-3">
+                                    <p class="text-slate-800 font-semibold">Web programlama final ödevini sisteme yükle.</p>
+                                    <div class="flex flex-wrap items-center mt-1.5 text-xs text-slate-500 gap-x-3 gap-y-1">
+                                        <span class="inline-flex items-center"><i class="fa-regular fa-clock mr-1"></i> Son Tarih: 15 Mayıs</span>
+                                        <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">Eğitim</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-start p-3.5 hover:bg-slate-50 rounded-xl transition-all border border-slate-200/70 hover:border-violet-200">
+                                <input type="checkbox" class="mt-1 h-5 w-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                                <div class="ml-3">
+                                    <p class="text-slate-800 font-semibold">Ahmet Bey'e pazarlama bütçesi mailini at.</p>
+                                    <div class="flex flex-wrap items-center mt-1.5 text-xs text-slate-500 gap-x-3 gap-y-1">
+                                        <span class="inline-flex items-center"><i class="fa-regular fa-clock mr-1"></i> Son Tarih: Yarın 14:00</span>
+                                        <span class="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold">Toplantı</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="mt-4 w-full py-2.5 text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">
+                            Tüm görevleri gör (12)
+                        </button>
+                    </div>
+
+                    <div class="bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80">
+                        <h4 class="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                            <i class="fa-solid fa-folder-tree text-purple-500 mr-2"></i> Son Analiz Edilen Kayıtlar
+                        </h4>
+                        <div class="space-y-3">
+                            <div class="flex items-center p-3.5 border border-slate-200/70 rounded-xl hover:shadow-soft hover:border-blue-200 transition-all">
+                                <div class="h-11 w-11 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                                    <i class="fa-solid fa-graduation-cap"></i>
+                                </div>
+                                <div class="ml-4 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-slate-800 font-bold text-sm">Veri Yapıları Dersi 3. Hafta</p>
+                                        <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">Eğitim</span>
+                                    </div>
+                                    <p class="text-slate-500 text-xs mt-0.5">3 dakikalık yapay zeka podcast özeti üretildi.</p>
+                                </div>
+                                <button class="h-9 w-9 rounded-lg border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all">
+                                    <i class="fa-solid fa-file-pdf"></i>
+                                </button>
+                            </div>
+
+                            <div class="flex items-center p-3.5 border border-amber-100 rounded-xl bg-amber-50/70 hover:shadow-soft transition-all">
+                                <div class="h-11 w-11 rounded-xl bg-amber-200 flex items-center justify-center text-amber-700">
+                                    <i class="fa-solid fa-file-video"></i>
+                                </div>
+                                <div class="ml-4 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-slate-800 font-bold text-sm">Startup Kurucusu Röportajı.mp4</p>
+                                        <span class="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">Gazeteci</span>
+                                    </div>
+                                    <p class="text-amber-700 font-medium text-xs mt-0.5 flex items-center">
+                                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> FFMPEG ile videodan sese dönüştürüldü.
+                                    </p>
+                                </div>
+                                <button class="h-9 w-9 rounded-lg border border-amber-200 text-amber-500 hover:text-amber-700 hover:border-amber-300 transition-all">
+                                    <i class="fa-solid fa-align-left"></i>
+                                </button>
+                            </div>
+
+                            <div class="flex items-center p-3.5 border border-slate-200/70 rounded-xl hover:shadow-soft hover:border-purple-200 transition-all">
+                                <div class="h-11 w-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                                    <i class="fa-solid fa-spinner fa-spin text-purple-500"></i>
+                                </div>
+                                <div class="ml-4 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-slate-800 font-bold text-sm">Proje Yönetimi Toplantısı</p>
+                                        <span class="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold">Toplantı</span>
+                                    </div>
+                                    <p class="text-purple-500 font-medium text-xs mt-0.5">NLP Algoritması görevleri arıyor... %60</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

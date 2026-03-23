@@ -1,0 +1,243 @@
+:root {
+    --sidebar-bg: #111827;
+    --sidebar-text: #cbd5e1;
+    --sidebar-active: #60a5fa;
+    --page-bg: #f3f6fb;
+    --card-bg: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --success-bg: #dcfce7;
+    --success-text: #166534;
+    --warning-bg: #fef3c7;
+    --warning-text: #92400e;
+    --danger-bg: #fee2e2;
+    --danger-text: #991b1b;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: var(--page-bg);
+    color: var(--text-main);
+}
+
+.layout {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+}
+
+.sidebar {
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    padding: 28px 20px;
+}
+
+.brand h1 {
+    color: #ffffff;
+    font-size: 1.25rem;
+}
+
+.brand p {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    margin-top: 6px;
+}
+
+.menu {
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.menu-item {
+    text-decoration: none;
+    color: var(--sidebar-text);
+    padding: 11px 12px;
+    border-radius: 10px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.menu-item:hover {
+    background: rgba(148, 163, 184, 0.15);
+}
+
+.menu-item.active {
+    background: rgba(96, 165, 250, 0.2);
+    color: #ffffff;
+    border: 1px solid rgba(96, 165, 250, 0.45);
+}
+
+.content {
+    padding: 28px;
+}
+
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 22px;
+}
+
+.content-header h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+}
+
+.primary-btn {
+    border: none;
+    background: #2563eb;
+    color: #ffffff;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.primary-btn:hover {
+    background: #1d4ed8;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.stat-value {
+    margin-top: 8px;
+    font-size: 1.65rem;
+}
+
+.stat-trend {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.stat-trend.up {
+    color: #15803d;
+}
+
+.stat-trend.down {
+    color: #b45309;
+}
+
+.table-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+}
+
+.table-header {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.table-header h3 {
+    font-size: 1.05rem;
+}
+
+.table-link {
+    text-decoration: none;
+    color: #2563eb;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    text-align: left;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.92rem;
+}
+
+thead th {
+    color: var(--text-muted);
+    font-weight: 600;
+    background: #f8fafc;
+}
+
+tbody tr:hover {
+    background: #f8fbff;
+}
+
+.badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 5px 9px;
+    border-radius: 999px;
+}
+
+.badge.done {
+    background: var(--success-bg);
+    color: var(--success-text);
+}
+
+.badge.waiting {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+}
+
+.badge.failed {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+@media (max-width: 1100px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 800px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        padding: 20px;
+    }
+
+    .menu {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+}
