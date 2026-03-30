@@ -6,8 +6,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    password = Column(String, nullable=False)
 
     # User'ın Record'ları ile ilişkisi (Bire-Çok)
     records = relationship("Record", back_populates="owner", cascade="all, delete-orphan")
