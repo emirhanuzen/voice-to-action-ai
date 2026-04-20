@@ -48,6 +48,10 @@ class ApiService {
         if (fullName != null && fullName.trim().isNotEmpty) {
           await prefs.setString('user_name', fullName.trim());
         }
+        final int? userId = data['user_id'] as int?;
+        if (userId != null) {
+          await prefs.setInt('user_id', userId);
+        }
         return <String, dynamic>{'success': true};
       }
 
@@ -186,30 +190,143 @@ class ApiService {
     return 'Islem basarisiz.';
   }
 
-  Future<String?> uploadMediaAndTranscribe(File file) async {
+  /// Returns `{'text': String, 'tasks': List<dynamic>}` on success, null on failure.
+  Future<Map<String, dynamic>?> uploadMediaAndTranscribe(
+    File file, {
+    String category = 'Diğer',
+  }) async {
     final Uri url = Uri.parse('$baseUrl/transcribe');
+
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final int userId = prefs.getInt('user_id') ?? 0;
+
+    print('[ApiService] uploadMediaAndTranscribe → URL: $url');
+    print('[ApiService] user_id=$userId  kategori=$category  '
+        'dosya=${file.path}');
+
+    if (userId == 0) {
+      print('[ApiService] UYARI: user_id=0. '
+          'Kullanıcı giriş yapmamış veya SharedPreferences boş olabilir.');
+    }
 
     try {
       final http.MultipartRequest request = http.MultipartRequest('POST', url)
+        ..fields['category'] = category
+        ..fields['user_id'] = userId.toString()
         ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+      print('[ApiService] Gönderilen form alanları: ${request.fields}');
 
       final http.StreamedResponse streamedResponse = await request.send();
       final String responseBody = await streamedResponse.stream.bytesToString();
 
+      print('[ApiService] Transcribe yanıt kodu: '
+          '${streamedResponse.statusCode}');
+      print('[ApiService] Transcribe yanıt body: '
+          '${responseBody.length > 300 ? responseBody.substring(0, 300) : responseBody}');
+
       if (streamedResponse.statusCode == 200) {
         final Map<String, dynamic> data =
             jsonDecode(responseBody) as Map<String, dynamic>;
-        return data['text'] as String?;
+        return <String, dynamic>{
+          'text': (data['text'] as String?) ?? '',
+          'tasks': (data['tasks'] as List<dynamic>?) ?? <dynamic>[],
+          'record_id': data['record_id'],
+        };
       }
 
-      print(
-        'Transcribe failed. Status: ${streamedResponse.statusCode}, '
-        'Body: $responseBody',
+      print('[ApiService] HATA ${streamedResponse.statusCode}: $responseBody');
+      return null;
+    } catch (e, stack) {
+      print('[ApiService] Transcribe istek hatası: $e');
+      print('[ApiService] Stack trace: $stack');
+      return null;
+    }
+  }
+
+  /// GET /api/records/{user_id} — kullanıcının geçmiş transkripsiyon kayıtları.
+  Future<List<Map<String, dynamic>>> getRecords() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? token = prefs.getString('access_token');
+    final int userId = prefs.getInt('user_id') ?? 0;
+
+    print('[ApiService] getRecords → user_id=$userId');
+
+    if (userId == 0) {
+      print('[ApiService] getRecords ATLANDI: user_id=0');
+      return <Map<String, dynamic>>[];
+    }
+
+    final Uri url = Uri.parse('$baseUrl/records/$userId');
+    print('[ApiService] getRecords URL: $url');
+
+    try {
+      final http.Response response = await http.get(
+        url,
+        headers: <String, String>{
+          'accept': 'application/json',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
       );
-      return null;
-    } catch (e) {
-      print('Transcribe request error: $e');
-      return null;
+
+      print('[ApiService] getRecords yanıt kodu: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+        print('[ApiService] getRecords: ${data.length} kayıt döndü.');
+        return data.whereType<Map<String, dynamic>>().toList();
+      }
+
+      print('[ApiService] getRecords HATA ${response.statusCode}: '
+          '${response.body}');
+      return <Map<String, dynamic>>[];
+    } catch (e, stack) {
+      print('[ApiService] getRecords istek hatası: $e\n$stack');
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  /// GET /api/tasks/{user_id} — kullanıcının NLP ile çıkarılmış görevleri.
+  Future<List<Map<String, dynamic>>> getTasks() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? token = prefs.getString('access_token');
+    final int userId = prefs.getInt('user_id') ?? 0;
+
+    print('[ApiService] getTasks → user_id=$userId');
+
+    if (userId == 0) {
+      print('[ApiService] getTasks ATLANDI: user_id=0');
+      return <Map<String, dynamic>>[];
+    }
+
+    final Uri url = Uri.parse('$baseUrl/tasks/$userId');
+    print('[ApiService] getTasks URL: $url');
+
+    try {
+      final http.Response response = await http.get(
+        url,
+        headers: <String, String>{
+          'accept': 'application/json',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('[ApiService] getTasks yanıt kodu: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+        print('[ApiService] getTasks: ${data.length} görev döndü.');
+        return data.whereType<Map<String, dynamic>>().toList();
+      }
+
+      print('[ApiService] getTasks HATA ${response.statusCode}: '
+          '${response.body}');
+      return <Map<String, dynamic>>[];
+    } catch (e, stack) {
+      print('[ApiService] getTasks istek hatası: $e\n$stack');
+      return <Map<String, dynamic>>[];
     }
   }
 }

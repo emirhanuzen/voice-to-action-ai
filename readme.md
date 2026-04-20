@@ -22,8 +22,8 @@ Aşağıdaki tablo, projenin Çevik (Agile) geliştirme sürecindeki haftalık h
 | **3** | ✅ Bitti  | **API Uç Noktaları ve Güvenlik** | • JWT tabanlı kullanıcı doğrulama (Auth) sistemi.<br>• Ses/Video yükleme API'lerinin yazılması. |
 | **4** |  ✅ Bitti  | **Ön Yüz İskeletlerinin Kurulumu** | • Flutter yönlendirme (routing) iskeletinin kurulması.<br>• Web paneli statik HTML/CSS şablonları. |
 | **5** | ✅ Bitti  | **Yapay Zeka Faz 1 (Sesten Metne)** | • FFMPEG ile videolardan ses ayrıştırma.<br>• Lokal Whisper modeli ile sesten metne dönüşüm. |
-| **6** | ⏳ Bekliyor | **NLP Algoritması Faz 2 (Görev Çıkarma)**| • Kural tabanlı NLP algoritmasının (spaCy/NLTK) yazılması.<br>• Görev ve tarihlerin JSON olarak tespit edilmesi. |
-| **7** | ⏳ Bekliyor | **Mobil Uygulama Veri Entegrasyonu** | • Flutter uygulamasının FastAPI sunucusuna bağlanması.<br>• Analizlerin dinamik kartlar halinde listelenmesi. |
+| **6** | ✅ Bitti   | **NLP Algoritması Faz 2 (Görev Çıkarma)**| • Kural tabanlı NLP algoritmasının (spaCy/NLTK) yazılması.<br>• Görev ve tarihlerin JSON olarak tespit edilmesi. |
+| **7** | ✅ Bitti  | **Mobil Uygulama Veri Entegrasyonu** | • Flutter uygulamasının FastAPI sunucusuna bağlanması.<br>• Analizlerin dinamik kartlar halinde listelenmesi. |
 | **8** | ⏳ Bekliyor | **Web Paneli Veri Analizi (FP)** | • Vanilla JS (`map`, `filter`, `reduce`) ile veri işleme.<br>• Analiz istatistiklerinin grafiklere dökülmesi. |
 | **9** | ⏳ Bekliyor | **Gelişmiş Eğitim Modülleri & ChatBot**| • Kural tabanlı çoktan seçmeli test (Quiz) üretilmesi.<br>• Python TTS ile özet podcast dönüşümü.<br>• Soru-cevap modülünün eklenmesi. |
 | **10** | ⏳ Bekliyor | **Testler ve Performans Optimizasyonu** | • Uçtan Uca (E2E) entegrasyon testlerinin yapılması.<br>• AI veri işleme hızının ve API'lerin optimize edilmesi. |

@@ -19,3 +19,4 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     full_name: str | None = None
+    user_id: int | None = None

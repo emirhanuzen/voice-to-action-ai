@@ -22,6 +22,7 @@ class Record(Base):
     filename = Column(String, nullable=False)
     category = Column(String)
     status = Column(String, default="pending")
+    transcribed_text = Column(String, nullable=True)
 
     # Record'ın sahibi olan User ile ilişkisi
     owner = relationship("User", back_populates="records")

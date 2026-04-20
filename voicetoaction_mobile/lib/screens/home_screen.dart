@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'profile_screen.dart';
 
-// ─── Veri modeli ──────────────────────────────────────────────────────────────
+// ─── Kayıt modeli ─────────────────────────────────────────────────────────────
 class _RecordItem {
   _RecordItem({
     required this.fileName,
@@ -19,6 +19,31 @@ class _RecordItem {
   final String fileName;
   final String category;
   final String transcript;
+}
+
+// ─── Görev modeli ─────────────────────────────────────────────────────────────
+class _TaskItem {
+  _TaskItem({
+    this.id,
+    required this.title,
+    this.dueDate,
+    this.status = 'pending',
+  });
+
+  factory _TaskItem.fromJson(Map<String, dynamic> json) => _TaskItem(
+        id: json['id'] as int?,
+        // Transkripsiyon API'si 'task_title', DB API'si 'title' döndürür.
+        title: (json['title'] as String?) ??
+            (json['task_title'] as String?) ??
+            'Görev',
+        dueDate: json['due_date'] as String?,
+        status: (json['status'] as String?) ?? 'pending',
+      );
+
+  final int? id;
+  final String title;
+  final String? dueDate;
+  final String status;
 }
 
 // ─── Kategori sabitleri ───────────────────────────────────────────────────────
@@ -90,11 +115,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String _currentFileName = '';
   String _currentCategory = '';
   final List<_RecordItem> _recentItems = <_RecordItem>[];
+  final List<_TaskItem> _tasks = <_TaskItem>[];
+  bool _isInitialLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadUserIdentity();
+    _loadInitialData();
   }
 
   // ── Identity ──────────────────────────────────────────────────────────────
@@ -107,6 +135,43 @@ class _HomeScreenState extends State<HomeScreen> {
       _userEmail = email;
       _userName = name.trim().isEmpty ? email : name;
     });
+  }
+
+  // ── Backend'den ilk veri yükü (kayıtlar + görevler) ──────────────────────
+  Future<void> _loadInitialData() async {
+    print('[HomeScreen] _loadInitialData başladı.');
+    setState(() => _isInitialLoading = true);
+
+    final List<Map<String, dynamic>> records = await _apiService.getRecords();
+    final List<Map<String, dynamic>> tasks = await _apiService.getTasks();
+
+    print('[HomeScreen] Backend\'den ${records.length} kayıt, '
+        '${tasks.length} görev alındı.');
+
+    if (!mounted) return;
+
+    setState(() {
+      _isInitialLoading = false;
+
+      _recentItems
+        ..clear()
+        ..addAll(
+          records.map(
+            (Map<String, dynamic> r) => _RecordItem(
+              fileName: (r['file_name'] as String?) ?? 'Kayıt',
+              category: (r['category'] as String?) ?? 'Diğer',
+              transcript: (r['transcript'] as String?) ?? '',
+            ),
+          ),
+        );
+
+      _tasks
+        ..clear()
+        ..addAll(tasks.map(_TaskItem.fromJson));
+    });
+
+    print('[HomeScreen] Liste güncellendi: '
+        '${_recentItems.length} kayıt, ${_tasks.length} görev.');
   }
 
   String _buildInitials(String name) {
@@ -274,11 +339,25 @@ class _HomeScreenState extends State<HomeScreen> {
       _currentCategory = chosenCategory;
     });
 
-    final String? text = await _apiService.uploadMediaAndTranscribe(
+    print('[HomeScreen] Transkripsiyon başlatıldı: '
+        'dosya=$pickedFileName kategori=$chosenCategory');
+
+    final Map<String, dynamic>? transcribeResult =
+        await _apiService.uploadMediaAndTranscribe(
       File(result.files.single.path!),
+      category: chosenCategory,
     );
 
+    print('[HomeScreen] Transkripsiyon yanıtı: $transcribeResult');
+
     if (!mounted) return;
+
+    final String? text = transcribeResult?['text'] as String?;
+    final List<dynamic> newTasksRaw =
+        (transcribeResult?['tasks'] as List<dynamic>?) ?? <dynamic>[];
+
+    print('[HomeScreen] Metin uzunluğu: ${text?.length ?? 0}, '
+        'yeni görev sayısı: ${newTasksRaw.length}');
 
     setState(() {
       _isLoading = false;
@@ -291,6 +370,15 @@ class _HomeScreenState extends State<HomeScreen> {
             transcript: text,
           ),
         );
+        for (final dynamic t in newTasksRaw) {
+          if (t is Map<String, dynamic>) {
+            _tasks.insert(0, _TaskItem.fromJson(t));
+          }
+        }
+        print('[HomeScreen] setState tamamlandı: '
+            'toplam ${_recentItems.length} kayıt, ${_tasks.length} görev.');
+      } else {
+        print('[HomeScreen] UYARI: Transkripsiyon boş veya null döndü.');
       }
     });
 
@@ -382,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Widget body;
     switch (_selectedBottomIndex) {
       case 1:
-        body = const _TasksPage();
+        body = _TasksPage(tasks: _tasks, isLoading: _isInitialLoading);
       case 2:
         body = _RecordsPage(
           recentItems: _recentItems,
@@ -504,41 +592,199 @@ class _HomePage extends StatelessWidget {
 // SAYFA: Görevler
 // ═══════════════════════════════════════════════════════════════════════════════
 class _TasksPage extends StatelessWidget {
-  const _TasksPage();
+  const _TasksPage({required this.tasks, this.isLoading = false});
+
+  final List<_TaskItem> tasks;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
+      );
+    }
+
+    if (tasks.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(36),
+              ),
+              child: const Icon(Icons.checklist_rounded,
+                  size: 36, color: Color(0xFF4F46E5)),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Yaklaşan Görev Bulunmuyor',
+              style: GoogleFonts.inter(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Ses kayıtlarından AI otomatik\ngörev çıkardığında burada görünecek.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF64748B),
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
+      itemCount: tasks.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (BuildContext context, int i) => _TaskCard(task: tasks[i]),
+    );
+  }
+}
+
+// ─── Görev kartı ──────────────────────────────────────────────────────────────
+class _TaskCard extends StatelessWidget {
+  const _TaskCard({required this.task});
+
+  final _TaskItem task;
+
+  @override
+  Widget build(BuildContext context) {
+    // Due date parse & format
+    String dueDateLabel = '';
+    bool isOverdue = false;
+    if (task.dueDate != null && task.dueDate!.isNotEmpty) {
+      try {
+        final DateTime dt = DateTime.parse(task.dueDate!);
+        isOverdue = dt.isBefore(DateTime.now());
+        dueDateLabel = '${dt.day.toString().padLeft(2, '0')}.'
+            '${dt.month.toString().padLeft(2, '0')}.'
+            '${dt.year}';
+      } catch (_) {
+        dueDateLabel = task.dueDate!;
+      }
+    }
+
+    final bool isDone = task.status == 'done';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0A0F172A),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Container(
-            width: 72,
-            height: 72,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF2FF),
-              borderRadius: BorderRadius.circular(36),
+              color: isDone
+                  ? const Color(0xFFDCFCE7)
+                  : const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.checklist_rounded,
-                size: 36, color: Color(0xFF4F46E5)),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Yaklaşan Görev Bulunmuyor',
-            style: GoogleFonts.inter(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF1E293B),
+            child: Icon(
+              isDone
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color:
+                  isDone ? const Color(0xFF16A34A) : const Color(0xFF4F46E5),
+              size: 20,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Ses kayıtlarından AI otomatik\ngörev çıkardığında burada görünecek.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: const Color(0xFF64748B),
-              height: 1.5,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  task.title,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: isDone
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF1E293B),
+                    height: 1.35,
+                    decoration: isDone
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
+                  ),
+                ),
+                if (dueDateLabel.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isOverdue
+                              ? const Color(0xFFFEF2F2)
+                              : const Color(0xFFEEF2FF),
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 9,
+                              color: isOverdue
+                                  ? const Color(0xFFDC2626)
+                                  : const Color(0xFF4F46E5),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              dueDateLabel,
+                              style: GoogleFonts.inter(
+                                color: isOverdue
+                                    ? const Color(0xFFDC2626)
+                                    : const Color(0xFF4F46E5),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.smart_toy_outlined,
+                          size: 11, color: Color(0xFF64748B)),
+                      const SizedBox(width: 3),
+                      Text(
+                        'AI tespit etti',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF64748B),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
         ],
