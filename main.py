@@ -1,5 +1,6 @@
 import os
 import re
+
 # FFMPEG adresini Python'a zorla öğretiyoruz
 os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
 
@@ -12,11 +13,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from auth import create_access_token, get_current_user, get_password_hash, verify_password
 from database import engine, get_db
 import models
 import schemas
 
 app = FastAPI(title="Voice To Action API", version="1.0.0")
+
+# CORS: Güvenlik JWT üzerinden sağlanıyor; origin kısıtlaması prod'da yapılmalı.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 whisper_model = whisper.load_model("base")
 
@@ -137,16 +149,11 @@ def extract_tasks_from_text(text: str) -> list[dict]:
 
     return tasks
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-#@app.on_event("startup")
+@app.on_event("startup")
 def on_startup():
-    models.Base.metadata.drop_all(bind=engine) # Başındaki # işaretini kaldır
+    # Sıfırlama gerektiğinde: aşağıdaki satırın başındaki '#' i kaldır,
+    # sunucuyu bir kez başlat, ardından tekrar yorum satırı yap.
+    # models.Base.metadata.drop_all(bind=engine)
     models.Base.metadata.create_all(bind=engine)
     
 @app.get("/")
@@ -166,7 +173,7 @@ def register(user: schemas.UserRegister, db: Session = Depends(get_db)):
     db_user = models.User(
         full_name=user.full_name,
         email=user.email,
-        password=user.password,
+        password=get_password_hash(user.password),  # bcrypt ile hashle
     )
     db.add(db_user)
     db.commit()
@@ -176,19 +183,22 @@ def register(user: schemas.UserRegister, db: Session = Depends(get_db)):
 
 @app.post("/api/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = (
-        db.query(models.User)
-        .filter(
-            models.User.email == form_data.username,
-            models.User.password == form_data.password,
+    # 1) Kullanıcıyı e-posta ile bul
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+
+    # 2) Şifreyi bcrypt ile doğrula
+    if not user or not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Hatalı şifre veya email",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        .first()
-    )
-    if not user:
-        raise HTTPException(status_code=401, detail="Hatalı şifre veya email")
+
+    # 3) JWT access token üret (sub = e-posta)
+    access_token = create_access_token(data={"sub": user.email})
 
     return {
-        "access_token": "token123",
+        "access_token": access_token,
         "token_type": "bearer",
         "full_name": user.full_name,
         "user_id": user.id,
@@ -218,8 +228,8 @@ async def upload_audio(file: UploadFile = File(...)):
 async def transcribe(
     file: UploadFile = File(...),
     category: str = Form("genel"),
-    user_id: int = Form(...),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # JWT koruması
 ):
     temp_file_path = "temp_audio_video_file"
     try:
@@ -231,9 +241,9 @@ async def transcribe(
         result = whisper_model.transcribe(temp_file_path)
         transcribed_text: str = result["text"]
 
-        # 3) records tablosuna kaydet
+        # 3) records tablosuna kaydet (user_id token'dan alınıyor)
         db_record = models.Record(
-            user_id=user_id,
+            user_id=current_user.id,
             filename=file.filename or "bilinmiyor",
             category=category,
             status="tamamlandi",
@@ -270,8 +280,15 @@ async def transcribe(
 
 
 @app.get("/api/records/{user_id}")
-def get_user_records(user_id: int, db: Session = Depends(get_db)):
-    """Kullanıcıya ait tüm transkripsiyon kayıtlarını döner."""
+def get_user_records(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # JWT koruması
+):
+    """Sadece kendi kayıtlarını görebilirsin."""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu verilere erişim yetkiniz yok.")
+
     records = (
         db.query(models.Record)
         .filter(models.Record.user_id == user_id)
@@ -291,8 +308,15 @@ def get_user_records(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/tasks/{user_id}")
-def get_user_tasks(user_id: int, db: Session = Depends(get_db)):
-    """Kullanıcının tüm kayıtlarına ait NLP görevlerini döner."""
+def get_user_tasks(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # JWT koruması
+):
+    """Sadece kendi görevlerini görebilirsin."""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu verilere erişim yetkiniz yok.")
+
     record_ids = [
         r.id
         for r in db.query(models.Record.id)
@@ -320,12 +344,13 @@ def get_user_tasks(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/api/update-profile")
-def update_profile(newName: str, email: str, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
-
-    user.full_name = newName
+def update_profile(
+    newName: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # JWT koruması
+):
+    """Token sahibinin adını günceller."""
+    current_user.full_name = newName
     db.commit()
-    db.refresh(user)
+    db.refresh(current_user)
     return {"message": "Profil güncellendi"}
