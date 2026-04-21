@@ -24,7 +24,7 @@ Aşağıdaki tablo, projenin Çevik (Agile) geliştirme sürecindeki haftalık h
 | **5** | ✅ Bitti  | **Yapay Zeka Faz 1 (Sesten Metne)** | • FFMPEG ile videolardan ses ayrıştırma.<br>• Lokal Whisper modeli ile sesten metne dönüşüm. |
 | **6** | ✅ Bitti   | **NLP Algoritması Faz 2 (Görev Çıkarma)**| • Kural tabanlı NLP algoritmasının (spaCy/NLTK) yazılması.<br>• Görev ve tarihlerin JSON olarak tespit edilmesi. |
 | **7** | ✅ Bitti  | **Mobil Uygulama Veri Entegrasyonu** | • Flutter uygulamasının FastAPI sunucusuna bağlanması.<br>• Analizlerin dinamik kartlar halinde listelenmesi. |
-| **8** | ⏳ Bekliyor | **Web Paneli Veri Analizi (FP)** | • Vanilla JS (`map`, `filter`, `reduce`) ile veri işleme.<br>• Analiz istatistiklerinin grafiklere dökülmesi. |
+| **8** | ✅ Bitti*  | **Web Paneli Veri Analizi (FP)** | • Vanilla JS (`map`, `filter`, `reduce`) ile veri işleme.<br>• Analiz istatistiklerinin grafiklere dökülmesi. |
 | **9** | ⏳ Bekliyor | **Gelişmiş Eğitim Modülleri & ChatBot**| • Kural tabanlı çoktan seçmeli test (Quiz) üretilmesi.<br>• Python TTS ile özet podcast dönüşümü.<br>• Soru-cevap modülünün eklenmesi. |
 | **10** | ⏳ Bekliyor | **Testler ve Performans Optimizasyonu** | • Uçtan Uca (E2E) entegrasyon testlerinin yapılması.<br>• AI veri işleme hızının ve API'lerin optimize edilmesi. |
 | **11** | ⏳ Bekliyor | **Dokümantasyon ve Final Sunumu** | • README dosyasının kullanım rehberine dönüştürülmesi.<br>• Final jüri sunumunun gerçekleştirilmesi. |
