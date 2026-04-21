@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import 'home_screen.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -29,7 +31,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
-    if (_isLoading) {
+    if (_isLoading) return;
+
+    // ── Yerel doğrulama ────────────────────────────────────────
+    if (_fullNameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
+      setState(() => _errorMessage = 'Tüm alanları doldurunuz.');
+      return;
+    }
+    if (_passwordController.text.length < 6) {
+      setState(() => _errorMessage = 'Şifre en az 6 karakter olmalıdır.');
       return;
     }
 
@@ -38,38 +50,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _errorMessage = null;
     });
 
+    // ── 1) Kayıt isteği ────────────────────────────────────────
     final Map<String, dynamic> registerResult = await _apiService.register(
       _emailController.text.trim(),
       _passwordController.text,
       _fullNameController.text.trim(),
     );
 
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
+    if (!mounted) return;
 
     if (registerResult['success'] != true) {
       final String message =
-          (registerResult['message'] as String?) ?? 'Kayit islemi basarisiz';
+          (registerResult['message'] as String?) ?? 'Kayıt işlemi başarısız';
       setState(() {
+        _isLoading = false;
         _errorMessage = message;
       });
       _showErrorSnackBar(context, message);
       return;
     }
 
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Basariyla kayit oldunuz, simdi giris yapin'),
-      ),
+    // ── 2) Kayıt başarılı → otomatik giriş ────────────────────
+    final Map<String, dynamic> loginResult = await _apiService.login(
+      _emailController.text.trim(),
+      _passwordController.text,
     );
-    Navigator.pushReplacementNamed(context, '/login');
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (loginResult['success'] == true) {
+      // Tüm yığını temizleyerek doğruca ana ekrana geç
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        HomeScreen.routeName,
+        (_) => false,
+      );
+    } else {
+      // Otomatik giriş başarısız (nadir) → login ekranına yönlendir
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Hesabınız oluşturuldu! Lütfen giriş yapın.'),
+        ),
+      );
+      Navigator.pushReplacementNamed(context, LoginScreen.routeName);
+    }
   }
 
   void _showErrorSnackBar(BuildContext context, String message) {

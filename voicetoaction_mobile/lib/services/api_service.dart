@@ -198,21 +198,22 @@ class ApiService {
     final Uri url = Uri.parse('$baseUrl/transcribe');
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final int userId = prefs.getInt('user_id') ?? 0;
+    final String? token = prefs.getString('access_token');
 
     print('[ApiService] uploadMediaAndTranscribe → URL: $url');
-    print('[ApiService] user_id=$userId  kategori=$category  '
-        'dosya=${file.path}');
+    print('[ApiService] kategori=$category  dosya=${file.path}');
 
-    if (userId == 0) {
-      print('[ApiService] UYARI: user_id=0. '
-          'Kullanıcı giriş yapmamış veya SharedPreferences boş olabilir.');
+    // JWT token zorunlu — eksikse işlemi durdur
+    if (token == null || token.isEmpty) {
+      print('[ApiService] HATA: access_token bulunamadı. Kullanıcı giriş yapmamış.');
+      return null;
     }
 
     try {
+      // user_id artık Form alanı değil; kimlik JWT Bearer token üzerinden doğrulanıyor.
       final http.MultipartRequest request = http.MultipartRequest('POST', url)
+        ..headers['Authorization'] = 'Bearer $token'
         ..fields['category'] = category
-        ..fields['user_id'] = userId.toString()
         ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
       print('[ApiService] Gönderilen form alanları: ${request.fields}');
