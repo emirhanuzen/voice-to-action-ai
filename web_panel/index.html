@@ -1,258 +1,585 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice To Action - Web Dashboard Taslağı</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-                    },
-                    colors: {
-                        brand: {
-                            900: "#0b1220",
-                            800: "#101a31",
-                            700: "#182544",
-                            500: "#3b82f6",
-                            400: "#60a5fa"
-                        }
-                    },
-                    boxShadow: {
-                        soft: "0 12px 34px -18px rgba(15, 23, 42, 0.45)",
-                        panel: "0 22px 50px -26px rgba(15, 23, 42, 0.45)"
-                    }
-                }
-            }
-        };
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoiceToAction</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary:       '#3b82f6',
+            'primary-light': '#eff6ff',
+            'primary-dark':  '#2563eb',
+          },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+
+    /* Drop-zone aktif durumu */
+    .drop-zone.dragover {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+    }
+
+    /* Scrollbar — görev ve transkript listeleri */
+    #tasksContainer::-webkit-scrollbar,
+    #transcriptsContainer::-webkit-scrollbar,
+    #allTasksContainer::-webkit-scrollbar     { width: 3px; }
+    #tasksContainer::-webkit-scrollbar-track,
+    #transcriptsContainer::-webkit-scrollbar-track,
+    #allTasksContainer::-webkit-scrollbar-track { background: transparent; }
+    #tasksContainer::-webkit-scrollbar-thumb,
+    #transcriptsContainer::-webkit-scrollbar-thumb,
+    #allTasksContainer::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9px; }
+
+    /* Modal içerik scrollbar */
+    #modalBody::-webkit-scrollbar       { width: 4px; }
+    #modalBody::-webkit-scrollbar-track { background: transparent; }
+    #modalBody::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9px; }
+
+    /* Sidebar nav geçiş animasyonu */
+    .nav-link { transition: background 0.12s ease, color 0.12s ease; }
+    .nav-link:hover   { background: #f8fafc; color: #1e293b; }
+    .nav-link.active  { background: #eff6ff; color: #3b82f6; }
+  </style>
 </head>
-<body class="font-sans text-slate-700 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100">
-    <div class="flex h-screen overflow-hidden">
-        <aside class="hidden md:flex w-72 bg-gradient-to-b from-brand-900 via-brand-800 to-brand-700 text-slate-200 flex-col border-r border-slate-700/60 shadow-panel">
-            <div class="px-6 py-7 border-b border-slate-600/40">
-                <h1 class="text-2xl font-extrabold tracking-tight text-white">
-                    <i class="fa-solid fa-microphone-lines text-brand-400 mr-2"></i>VoiceToAction
-                </h1>
-                <p class="text-slate-400 text-sm mt-1">AI Destekli Asistan</p>
-            </div>
 
-            <nav class="p-4 space-y-2">
-                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-white font-medium bg-gradient-to-r from-blue-600 to-indigo-600 shadow-soft border border-blue-400/20">
-                    <i class="fa-solid fa-chart-pie w-5 text-blue-100"></i>
-                    <span>Analiz Paneli</span>
-                </a>
-                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600/30 transition-all">
-                    <i class="fa-solid fa-folder-open w-5 text-slate-400 group-hover:text-slate-200"></i>
-                    <span>Tüm Kayıtlar</span>
-                </a>
-                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600/30 transition-all">
-                    <i class="fa-solid fa-check-double w-5 text-slate-400 group-hover:text-slate-200"></i>
-                    <span>Görevler</span>
-                </a>
-            </nav>
+<body class="bg-slate-50 text-gray-800 min-h-screen antialiased">
 
-            <div class="flex-1 px-4 mt-2">
-                <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.16em] mb-3 px-3">Kategoriler</p>
-                <nav class="space-y-1.5">
-                    <a href="#" class="flex items-center p-2.5 hover:bg-slate-600/25 rounded-xl text-slate-300 text-sm transition-all">
-                        <span class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-3"></span> Eğitim & Podcast
-                    </a>
-                    <a href="#" class="flex items-center p-2.5 hover:bg-slate-600/25 rounded-xl text-slate-300 text-sm transition-all">
-                        <span class="w-2.5 h-2.5 rounded-full bg-purple-500 mr-3"></span> İş & Toplantı
-                    </a>
-                    <a href="#" class="flex items-center p-2.5 hover:bg-slate-600/25 rounded-xl text-slate-300 text-sm transition-all">
-                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 mr-3"></span> Gazeteci & Röportaj
-                    </a>
-                </nav>
-            </div>
+  <!-- ═══════════════════════════════════════════════════════════
+       AUTH EKRANI — Giriş & Kayıt (tek kart, geçişli)
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="loginScreen" class="flex items-center justify-center min-h-screen px-4 bg-white">
+    <div class="w-full max-w-sm">
 
-            <div class="p-4 border-t border-slate-600/40">
-                <a href="#" class="group flex items-center gap-3 p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600/30 transition-all">
-                    <i class="fa-solid fa-gear w-5 text-slate-400 group-hover:text-slate-200"></i>
-                    <span>Ayarlar</span>
-                </a>
-            </div>
-        </aside>
+      <!-- Logo (her iki formda ortak) -->
+      <div class="flex flex-col items-center mb-8">
+        <div class="w-[72px] h-[72px] rounded-3xl bg-primary shadow-xl shadow-blue-500/30
+                    flex items-center justify-center mb-5">
+          <i class="fa-solid fa-microphone-lines text-white text-[26px]"></i>
+        </div>
+        <h1 class="text-[26px] font-bold text-gray-900 tracking-tight">VoiceToAction</h1>
+        <p id="authSubtitle" class="text-sm text-gray-400 mt-1.5">Hesabınıza giriş yapın</p>
+      </div>
 
-        <main class="flex-1 flex flex-col overflow-y-auto">
-            <header class="sticky top-0 z-10 backdrop-blur-xl bg-white/80 border-b border-slate-200/80 px-5 lg:px-8 py-4 flex justify-between items-center">
-                <div class="flex items-center">
-                    <button class="md:hidden mr-4 text-slate-500"><i class="fa-solid fa-bars text-xl"></i></button>
-                    <h2 class="text-xl font-bold text-slate-800 tracking-tight">Genel Bakış</h2>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <button class="relative h-10 w-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:shadow-soft transition-all">
-                        <i class="fa-solid fa-bell"></i>
-                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full h-4 w-4 flex items-center justify-center font-semibold">3</span>
-                    </button>
-                    <button class="flex items-center gap-3 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:shadow-soft transition-all">
-                        <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 border border-blue-200 flex items-center justify-center text-blue-700 font-bold">
-                            EM
-                        </div>
-                        <div class="hidden sm:block text-left">
-                            <p class="text-sm font-semibold text-slate-800 leading-tight">Emirhan</p>
-                            <p class="text-xs text-slate-500 leading-tight">Yönetici</p>
-                        </div>
-                    </button>
-                </div>
-            </header>
+      <!-- ── GİRİŞ FORMU ──────────────────────────────────── -->
+      <div id="loginForm" class="space-y-3">
+        <input
+          type="email"
+          id="emailInput"
+          placeholder="E-posta adresi"
+          class="w-full px-4 py-[14px] rounded-2xl border border-slate-200 bg-slate-50
+                 text-sm text-gray-800 placeholder-gray-400
+                 focus:outline-none focus:ring-2 focus:ring-primary/20
+                 focus:border-primary focus:bg-white transition-all"
+          onkeydown="if(event.key==='Enter') login()"
+        />
 
-            <div class="p-5 lg:p-8 space-y-8">
-                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
-                    <div>
-                        <h3 class="text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight">Hoş geldin, Emirhan 👋</h3>
-                        <p class="text-slate-500 mt-1.5">Yapay zeka bu hafta kayıtlarından 12 yeni görev çıkardı.</p>
-                    </div>
-                    <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                        <button class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-4 py-2.5 rounded-xl font-medium shadow-soft transition-all">
-                            <i class="fa-solid fa-file-video"></i> Videoyu Sese Çevir
-                        </button>
-                        <button class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white px-4 py-2.5 rounded-xl font-medium shadow-soft transition-all">
-                            <i class="fa-solid fa-microphone-lines"></i> Yeni Ses Kaydet
-                        </button>
-                    </div>
-                </div>
+        <input
+          type="password"
+          id="passwordInput"
+          placeholder="Şifre"
+          class="w-full px-4 py-[14px] rounded-2xl border border-slate-200 bg-slate-50
+                 text-sm text-gray-800 placeholder-gray-400
+                 focus:outline-none focus:ring-2 focus:ring-primary/20
+                 focus:border-primary focus:bg-white transition-all"
+          onkeydown="if(event.key==='Enter') login()"
+        />
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <div class="group bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80 hover:-translate-y-0.5 hover:shadow-panel transition-all">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-slate-500 text-sm font-medium">Tamamlanan Görevler</p>
-                                <h4 class="text-3xl font-bold text-slate-800 mt-2">%75</h4>
-                            </div>
-                            <div class="bg-emerald-50 p-3 rounded-xl text-emerald-600 border border-emerald-100">
-                                <i class="fa-solid fa-chart-line text-xl"></i>
-                            </div>
-                        </div>
-                        <div class="w-full bg-slate-200 rounded-full h-2 mt-4 overflow-hidden">
-                            <div class="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full" style="width: 75%"></div>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-2">Geçen haftaya göre +%12 artış (Filter kullanıldı)</p>
-                    </div>
+        <button
+          id="loginBtn"
+          onclick="login()"
+          class="w-full bg-primary hover:bg-primary-dark active:scale-[.99] text-white
+                 font-semibold py-[14px] rounded-2xl transition-all mt-1
+                 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+        >
+          <span id="loginBtnText">Giriş Yap</span>
+          <i id="loginBtnIcon" class="fa-solid fa-arrow-right text-sm"></i>
+        </button>
 
-                    <div class="group bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80 hover:-translate-y-0.5 hover:shadow-panel transition-all">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-slate-500 text-sm font-medium">Toplam İşlenen Süre</p>
-                                <h4 class="text-3xl font-bold text-slate-800 mt-2">14<span class="text-lg text-slate-500 font-normal"> saat</span></h4>
-                            </div>
-                            <div class="bg-blue-50 p-3 rounded-xl text-blue-600 border border-blue-100">
-                                <i class="fa-solid fa-microphone text-xl"></i>
-                            </div>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-6">Toplam 8 farklı kayıt analiz edildi (Reduce kullanıldı)</p>
-                    </div>
+        <!-- Kayıt Ol geçiş linki -->
+        <p class="text-center text-sm text-gray-400 pt-1">
+          Hesabınız yok mu?
+          <button
+            onclick="showRegisterForm()"
+            class="text-primary font-semibold hover:underline focus:outline-none ml-1"
+          >Kayıt Ol</button>
+        </p>
+      </div>
 
-                    <div class="group bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80 hover:-translate-y-0.5 hover:shadow-panel transition-all">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-slate-500 text-sm font-medium">Yaklaşan Etkinlikler</p>
-                                <h4 class="text-3xl font-bold text-slate-800 mt-2">3</h4>
-                            </div>
-                            <div class="bg-violet-50 p-3 rounded-xl text-violet-600 border border-violet-100">
-                                <i class="fa-solid fa-calendar-day text-xl"></i>
-                            </div>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-6">Yapay zeka tarafından metinden çıkarıldı</p>
-                    </div>
-                </div>
+      <!-- ── KAYIT FORMU (başlangıçta gizli) ─────────────── -->
+      <div id="registerForm" class="hidden space-y-3">
+        <input
+          type="text"
+          id="regFullName"
+          placeholder="Ad Soyad"
+          class="w-full px-4 py-[14px] rounded-2xl border border-slate-200 bg-slate-50
+                 text-sm text-gray-800 placeholder-gray-400
+                 focus:outline-none focus:ring-2 focus:ring-primary/20
+                 focus:border-primary focus:bg-white transition-all"
+          onkeydown="if(event.key==='Enter') register()"
+        />
 
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                    <div class="bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80">
-                        <h4 class="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                            <i class="fa-solid fa-list-check text-blue-500 mr-2"></i> AI Tarafından Bulunan Görevler
-                        </h4>
-                        <div class="space-y-3">
-                            <div class="flex items-start p-3.5 hover:bg-slate-50 rounded-xl transition-all border border-slate-200/70 hover:border-blue-200">
-                                <input type="checkbox" class="mt-1 h-5 w-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
-                                <div class="ml-3">
-                                    <p class="text-slate-800 font-semibold">Web programlama final ödevini sisteme yükle.</p>
-                                    <div class="flex flex-wrap items-center mt-1.5 text-xs text-slate-500 gap-x-3 gap-y-1">
-                                        <span class="inline-flex items-center"><i class="fa-regular fa-clock mr-1"></i> Son Tarih: 15 Mayıs</span>
-                                        <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">Eğitim</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex items-start p-3.5 hover:bg-slate-50 rounded-xl transition-all border border-slate-200/70 hover:border-violet-200">
-                                <input type="checkbox" class="mt-1 h-5 w-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
-                                <div class="ml-3">
-                                    <p class="text-slate-800 font-semibold">Ahmet Bey'e pazarlama bütçesi mailini at.</p>
-                                    <div class="flex flex-wrap items-center mt-1.5 text-xs text-slate-500 gap-x-3 gap-y-1">
-                                        <span class="inline-flex items-center"><i class="fa-regular fa-clock mr-1"></i> Son Tarih: Yarın 14:00</span>
-                                        <span class="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold">Toplantı</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <button class="mt-4 w-full py-2.5 text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">
-                            Tüm görevleri gör (12)
-                        </button>
-                    </div>
+        <input
+          type="email"
+          id="regEmail"
+          placeholder="E-posta adresi"
+          class="w-full px-4 py-[14px] rounded-2xl border border-slate-200 bg-slate-50
+                 text-sm text-gray-800 placeholder-gray-400
+                 focus:outline-none focus:ring-2 focus:ring-primary/20
+                 focus:border-primary focus:bg-white transition-all"
+          onkeydown="if(event.key==='Enter') register()"
+        />
 
-                    <div class="bg-white/95 p-6 rounded-2xl shadow-soft border border-slate-200/80">
-                        <h4 class="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                            <i class="fa-solid fa-folder-tree text-purple-500 mr-2"></i> Son Analiz Edilen Kayıtlar
-                        </h4>
-                        <div class="space-y-3">
-                            <div class="flex items-center p-3.5 border border-slate-200/70 rounded-xl hover:shadow-soft hover:border-blue-200 transition-all">
-                                <div class="h-11 w-11 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
-                                    <i class="fa-solid fa-graduation-cap"></i>
-                                </div>
-                                <div class="ml-4 flex-1">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <p class="text-slate-800 font-bold text-sm">Veri Yapıları Dersi 3. Hafta</p>
-                                        <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">Eğitim</span>
-                                    </div>
-                                    <p class="text-slate-500 text-xs mt-0.5">3 dakikalık yapay zeka podcast özeti üretildi.</p>
-                                </div>
-                                <button class="h-9 w-9 rounded-lg border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all">
-                                    <i class="fa-solid fa-file-pdf"></i>
-                                </button>
-                            </div>
+        <input
+          type="password"
+          id="regPassword"
+          placeholder="Şifre (en az 6 karakter)"
+          class="w-full px-4 py-[14px] rounded-2xl border border-slate-200 bg-slate-50
+                 text-sm text-gray-800 placeholder-gray-400
+                 focus:outline-none focus:ring-2 focus:ring-primary/20
+                 focus:border-primary focus:bg-white transition-all"
+          onkeydown="if(event.key==='Enter') register()"
+        />
 
-                            <div class="flex items-center p-3.5 border border-amber-100 rounded-xl bg-amber-50/70 hover:shadow-soft transition-all">
-                                <div class="h-11 w-11 rounded-xl bg-amber-200 flex items-center justify-center text-amber-700">
-                                    <i class="fa-solid fa-file-video"></i>
-                                </div>
-                                <div class="ml-4 flex-1">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <p class="text-slate-800 font-bold text-sm">Startup Kurucusu Röportajı.mp4</p>
-                                        <span class="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">Gazeteci</span>
-                                    </div>
-                                    <p class="text-amber-700 font-medium text-xs mt-0.5 flex items-center">
-                                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> FFMPEG ile videodan sese dönüştürüldü.
-                                    </p>
-                                </div>
-                                <button class="h-9 w-9 rounded-lg border border-amber-200 text-amber-500 hover:text-amber-700 hover:border-amber-300 transition-all">
-                                    <i class="fa-solid fa-align-left"></i>
-                                </button>
-                            </div>
+        <button
+          id="regBtn"
+          onclick="register()"
+          class="w-full bg-primary hover:bg-primary-dark active:scale-[.99] text-white
+                 font-semibold py-[14px] rounded-2xl transition-all mt-1
+                 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+        >
+          <span id="regBtnText">Kayıt Ol</span>
+          <i id="regBtnIcon" class="fa-solid fa-user-plus text-sm"></i>
+        </button>
 
-                            <div class="flex items-center p-3.5 border border-slate-200/70 rounded-xl hover:shadow-soft hover:border-purple-200 transition-all">
-                                <div class="h-11 w-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
-                                    <i class="fa-solid fa-spinner fa-spin text-purple-500"></i>
-                                </div>
-                                <div class="ml-4 flex-1">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <p class="text-slate-800 font-bold text-sm">Proje Yönetimi Toplantısı</p>
-                                        <span class="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold">Toplantı</span>
-                                    </div>
-                                    <p class="text-purple-500 font-medium text-xs mt-0.5">NLP Algoritması görevleri arıyor... %60</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+        <!-- Giriş Yap geçiş linki -->
+        <p class="text-center text-sm text-gray-400 pt-1">
+          Zaten hesabınız var mı?
+          <button
+            onclick="showLoginForm()"
+            class="text-primary font-semibold hover:underline focus:outline-none ml-1"
+          >Giriş Yap</button>
+        </p>
+      </div>
+
+      <!-- Hata / bilgi mesajı (her iki form tarafından kullanılır) -->
+      <div id="loginError"
+        class="hidden mt-4 bg-red-50 border border-red-100 rounded-2xl
+               px-4 py-3 flex items-center gap-2">
+        <i class="fa-solid fa-circle-exclamation text-red-400 text-sm flex-shrink-0"></i>
+        <span id="loginErrorText" class="text-xs text-red-500 font-medium">
+          Giriş başarısız
+        </span>
+      </div>
+
+      <!-- Başarı mesajı -->
+      <div id="successMsg"
+        class="hidden mt-4 bg-emerald-50 border border-emerald-100 rounded-2xl
+               px-4 py-3 flex items-center gap-2">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-sm flex-shrink-0"></i>
+        <span id="successMsgText" class="text-xs text-emerald-600 font-medium"></span>
+      </div>
+
     </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       DASHBOARD — Sidebar + İçerik
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="dashboardScreen" class="hidden">
+
+    <!-- ── SIDEBAR (yalnızca masaüstü) ──────────────────────── -->
+    <aside class="fixed inset-y-0 left-0 w-60 bg-white border-r border-slate-100
+                  flex-col z-40 hidden lg:flex">
+
+      <!-- Başlık / Logo -->
+      <div class="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
+        <div class="w-9 h-9 rounded-2xl bg-primary flex items-center justify-center
+                    shadow-md shadow-blue-500/25">
+          <i class="fa-solid fa-microphone-lines text-white text-sm"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-gray-900">VoiceToAction</p>
+          <p class="text-[10px] text-gray-400">Web Panel</p>
+        </div>
+      </div>
+
+      <!-- Navigasyon -->
+      <nav class="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
+        <a href="#" id="nav-dashboard"
+          onclick="showSection('dashboard'); return false;"
+          class="nav-link active flex items-center gap-3 px-3 py-2.5 rounded-2xl
+                 text-sm font-medium">
+          <i class="fa-solid fa-house-chimney w-4 text-center text-sm"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#" id="nav-tasks"
+          onclick="showSection('tasks'); return false;"
+          class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-2xl
+                 text-sm font-medium text-gray-500">
+          <i class="fa-solid fa-list-check w-4 text-center text-sm"></i>
+          <span>Görevlerim</span>
+        </a>
+        <a href="#" id="nav-records"
+          onclick="showSection('records'); return false;"
+          class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-2xl
+                 text-sm font-medium text-gray-500">
+          <i class="fa-solid fa-microphone w-4 text-center text-sm"></i>
+          <span>Ses Kayıtları</span>
+        </a>
+        <a href="#" id="nav-stats"
+          onclick="showSection('stats'); return false;"
+          class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-2xl
+                 text-sm font-medium text-gray-500">
+          <i class="fa-solid fa-chart-pie w-4 text-center text-sm"></i>
+          <span>İstatistikler</span>
+        </a>
+      </nav>
+
+      <!-- Kullanıcı + Çıkış (en alt) -->
+      <div class="px-3 py-4 border-t border-slate-100 space-y-0.5">
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-slate-50">
+          <div id="userInitial"
+            class="w-8 h-8 rounded-xl bg-primary text-white flex items-center
+                   justify-center text-xs font-bold flex-shrink-0">
+            ?
+          </div>
+          <div class="min-w-0 flex-1">
+            <p id="welcomeText" class="text-xs font-semibold text-gray-800 truncate">
+              Kullanıcı
+            </p>
+            <p class="text-[10px] text-gray-400">Aktif Oturum</p>
+          </div>
+        </div>
+        <button
+          onclick="logout()"
+          class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl
+                 text-sm font-medium text-red-500 hover:!bg-red-50">
+          <i class="fa-solid fa-right-from-bracket w-4 text-center text-sm"></i>
+          <span>Çıkış Yap</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ── MOBİL ÜSTÜST BAR ──────────────────────────────────── -->
+    <header class="lg:hidden fixed top-0 inset-x-0 z-40 bg-white border-b border-slate-100">
+      <div class="flex items-center justify-between px-4 py-3.5">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
+            <i class="fa-solid fa-microphone-lines text-white text-xs"></i>
+          </div>
+          <span class="text-sm font-bold text-gray-900">VoiceToAction</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div id="userInitialMobile"
+            class="w-8 h-8 rounded-xl bg-primary text-white flex items-center
+                   justify-center text-xs font-bold">
+            ?
+          </div>
+          <button onclick="logout()"
+            class="w-9 h-9 flex items-center justify-center rounded-xl
+                   text-red-400 hover:bg-red-50 transition">
+            <i class="fa-solid fa-right-from-bracket text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── ANA İÇERİK ────────────────────────────────────────── -->
+    <main class="lg:ml-60 min-h-screen pt-16 lg:pt-0 bg-slate-50">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-5 lg:py-10">
+
+        <!-- Masaüstü karşılama satırı (tüm view'larda görünür) -->
+        <div class="hidden lg:flex items-center justify-between mb-8">
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">
+              Merhaba,&nbsp;<span id="welcomeTextMain">Kullanıcı</span>&nbsp;👋
+            </h2>
+            <p class="text-xs text-gray-400 mt-1">
+              Ses kayıtları ve görevleriniz gerçek zamanlı senkronize ediliyor.
+            </p>
+          </div>
+          <button
+            id="refreshBtn"
+            onclick="fetchData()"
+            class="flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200
+                   text-gray-600 font-semibold text-sm px-4 py-2 rounded-2xl transition shadow-sm">
+            <i class="fa-solid fa-rotate-right text-xs"></i>
+            Yenile
+          </button>
+        </div>
+
+        <!-- Mobil yenile butonu -->
+        <div class="lg:hidden flex justify-end mb-3">
+          <button onclick="fetchData()"
+            class="flex items-center gap-1.5 bg-white border border-slate-200
+                   text-gray-500 font-semibold text-xs px-3 py-2 rounded-xl shadow-sm transition">
+            <i class="fa-solid fa-rotate-right text-[10px]"></i> Yenile
+          </button>
+        </div>
+
+        <!-- ═══ VIEW: DASHBOARD ════════════════════════════════ -->
+        <div id="view-dashboard">
+
+          <!-- İstatistik kartları -->
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="bg-white rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col items-center text-center">
+              <div class="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center mb-2.5">
+                <i class="fa-solid fa-folder-open text-primary"></i>
+              </div>
+              <p id="totalRecords" class="text-2xl sm:text-3xl font-bold text-gray-900 leading-none">0</p>
+              <p class="text-[10px] text-gray-400 font-medium mt-1.5">Toplam Kayıt</p>
+            </div>
+            <div class="bg-primary rounded-3xl p-4 sm:p-5 shadow-lg shadow-blue-500/25 flex flex-col items-center text-center">
+              <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center mb-2.5">
+                <i class="fa-solid fa-list-check text-white"></i>
+              </div>
+              <p id="totalTasks" class="text-2xl sm:text-3xl font-bold text-white leading-none">0</p>
+              <p class="text-[10px] text-white/80 font-medium mt-1.5">Tespit Edilen</p>
+            </div>
+            <div class="bg-white rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col items-center text-center">
+              <div class="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center mb-2.5">
+                <i class="fa-solid fa-clock text-amber-500"></i>
+              </div>
+              <p id="pendingTasks" class="text-2xl sm:text-3xl font-bold text-gray-900 leading-none">0</p>
+              <p class="text-[10px] text-gray-400 font-medium mt-1.5">Bekleyen</p>
+            </div>
+          </div>
+
+          <!-- Yükleme + Grafik -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+
+            <div class="bg-white rounded-3xl p-5 shadow-sm">
+              <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-cloud-arrow-up text-primary"></i>
+                Web'den Ses Yükle
+              </p>
+              <div id="dropZone"
+                class="drop-zone border-2 border-dashed border-slate-200 rounded-2xl
+                       p-7 text-center cursor-pointer transition-all
+                       hover:border-primary hover:bg-blue-50/40"
+                onclick="document.getElementById('fileInput').click()"
+                ondragover="event.preventDefault(); this.classList.add('dragover')"
+                ondragleave="this.classList.remove('dragover')"
+                ondrop="handleDrop(event)">
+                <div class="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
+                  <i class="fa-solid fa-file-audio text-slate-300 text-xl"></i>
+                </div>
+                <p class="text-sm font-semibold text-gray-600">Dosyayı buraya sürükleyin</p>
+                <p class="text-xs text-gray-400 mt-1">
+                  veya&nbsp;<span class="text-primary font-semibold">tıklayarak seçin</span>
+                </p>
+                <p class="text-[10px] text-gray-300 mt-2 font-medium">mp3 · wav · m4a · mp4</p>
+                <input type="file" id="fileInput" class="hidden" accept="audio/*,video/*" onchange="uploadFile()" />
+              </div>
+              <div id="uploadStatus" class="hidden mt-3">
+                <div id="uploadStatusInner"
+                  class="flex items-center gap-3 p-3 bg-blue-50 rounded-2xl border border-blue-100">
+                  <div id="uploadSpinner"
+                    class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0">
+                  </div>
+                  <p id="uploadStatusText" class="text-xs font-semibold text-primary">Analiz ediliyor...</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-3xl p-5 shadow-sm">
+              <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie text-primary"></i>
+                Kategori Dağılımı
+              </p>
+              <div id="chartWrapper" class="relative h-[150px]">
+                <canvas id="categoryChart" class="h-full"></canvas>
+                <div id="chartCenter"
+                  class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span id="chartTotalNum" class="text-2xl font-bold text-gray-900">0</span>
+                  <span class="text-[9px] text-gray-400 font-semibold uppercase tracking-widest">Kayıt</span>
+                </div>
+              </div>
+              <div id="chartLegend" class="mt-3 flex flex-wrap gap-2"></div>
+              <div id="chartEmpty" class="hidden text-center py-6">
+                <i class="fa-solid fa-chart-pie text-slate-100 text-3xl mb-2"></i>
+                <p class="text-xs text-gray-300">Henüz kayıt yok</p>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Görevler + Transkriptler (Sekmeli) -->
+          <div class="bg-white rounded-3xl shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <div class="flex bg-slate-100 rounded-2xl p-1 gap-1">
+                <button id="tabTasks" onclick="switchTab('tasks')"
+                  class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-primary shadow-sm transition">
+                  <i class="fa-solid fa-thumbtack mr-1 text-[10px]"></i>Görevler
+                </button>
+                <button id="tabTranscripts" onclick="switchTab('transcripts')"
+                  class="px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-400 transition">
+                  <i class="fa-solid fa-file-waveform mr-1 text-[10px]"></i>Transkriptler
+                </button>
+              </div>
+              <span class="text-[10px] text-gray-300 font-medium hidden lg:block">
+                <i class="fa-solid fa-mobile-screen-button mr-1"></i>Tüm cihazlarla senkronize
+              </span>
+            </div>
+
+            <!-- Panel: Görevler -->
+            <div id="panelTasks">
+              <div id="tasksLoading" class="hidden py-10 flex flex-col items-center gap-3">
+                <div class="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-xs text-gray-400">Veriler yükleniyor...</p>
+              </div>
+              <div id="tasksContainer" class="divide-y divide-slate-50 max-h-96 overflow-y-auto"></div>
+            </div>
+
+            <!-- Panel: Transkriptler -->
+            <div id="panelTranscripts" class="hidden">
+              <div id="transcriptsContainer" class="divide-y divide-slate-50 max-h-96 overflow-y-auto"></div>
+            </div>
+          </div>
+
+        </div><!-- /view-dashboard -->
+
+        <!-- ═══ VIEW: GÖREVLERİM ════════════════════════════════ -->
+        <div id="view-tasks" class="hidden">
+          <div class="bg-white rounded-3xl shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-primary text-xs"></i>
+                Tüm Görevlerim
+              </h3>
+              <span id="allTasksBadge"
+                class="text-[10px] bg-primary-light text-primary font-bold px-2.5 py-1 rounded-full">0</span>
+            </div>
+            <div id="allTasksContainer" class="divide-y divide-slate-50 overflow-y-auto max-h-[600px]"></div>
+          </div>
+        </div>
+
+        <!-- ═══ VIEW: SES KAYITLARI ══════════════════════════════ -->
+        <div id="view-records" class="hidden">
+          <div class="bg-white rounded-3xl shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i class="fa-solid fa-microphone text-primary text-xs"></i>
+                Ses Kayıtları
+              </h3>
+              <span id="recordsCountBadge"
+                class="text-[10px] bg-slate-100 text-gray-500 font-bold px-2.5 py-1 rounded-full">0 kayıt</span>
+            </div>
+            <div id="recordsListContainer" class="divide-y divide-slate-50"></div>
+          </div>
+        </div>
+
+        <!-- ═══ VIEW: İSTATİSTİKLER ══════════════════════════════ -->
+        <div id="view-stats" class="hidden space-y-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-white rounded-3xl p-6 shadow-sm flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid fa-folder-open text-primary text-xl"></i>
+              </div>
+              <div>
+                <p id="statTotalRecords" class="text-3xl font-bold text-gray-900">0</p>
+                <p class="text-xs text-gray-400 font-medium mt-0.5">Toplam Ses Kaydı</p>
+              </div>
+            </div>
+            <div class="bg-primary rounded-3xl p-6 shadow-lg shadow-blue-500/20 flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid fa-list-check text-white text-xl"></i>
+              </div>
+              <div>
+                <p id="statTotalTasks" class="text-3xl font-bold text-white">0</p>
+                <p class="text-xs text-white/80 font-medium mt-0.5">Tespit Edilen Görev</p>
+              </div>
+            </div>
+            <div class="bg-white rounded-3xl p-6 shadow-sm flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid fa-clock text-amber-500 text-xl"></i>
+              </div>
+              <div>
+                <p id="statPendingTasks" class="text-3xl font-bold text-gray-900">0</p>
+                <p class="text-xs text-gray-400 font-medium mt-0.5">Bekleyen Görev</p>
+              </div>
+            </div>
+            <div class="bg-white rounded-3xl p-6 shadow-sm flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid fa-circle-check text-emerald-500 text-xl"></i>
+              </div>
+              <div>
+                <p id="statDoneTasks" class="text-3xl font-bold text-gray-900">0</p>
+                <p class="text-xs text-gray-400 font-medium mt-0.5">Tamamlanan Görev</p>
+              </div>
+            </div>
+          </div>
+          <div class="bg-white rounded-3xl shadow-sm p-5">
+            <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <i class="fa-solid fa-chart-bar text-primary"></i>
+              Kategori Dağılımı
+            </p>
+            <div id="statsCategoryList" class="space-y-2.5"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <footer class="text-center pb-8 pt-2 text-[10px] text-gray-300 font-medium">
+        VoiceToAction © 2026 · Shared State Platform
+      </footer>
+    </main>
+
+  </div><!-- /dashboardScreen -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TRANSKRİPT MODALİ
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="transcriptModal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div class="absolute inset-0 bg-black/25 backdrop-blur-sm" onclick="closeModal()"></div>
+    <div class="relative bg-white rounded-3xl shadow-2xl shadow-gray-300/40
+                w-full max-w-2xl max-h-[80vh] flex flex-col z-10">
+      <div class="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-4 flex-shrink-0">
+        <div class="min-w-0 flex-1">
+          <h3 id="modalTitle" class="text-base font-bold text-gray-900 truncate">Transkript</h3>
+          <span id="modalMeta"
+            class="inline-block mt-1.5 text-[10px] bg-primary-light text-primary
+                   font-semibold px-2.5 py-0.5 rounded-full">Kategori</span>
+        </div>
+        <button onclick="closeModal()"
+          class="w-8 h-8 flex items-center justify-center rounded-2xl
+                 hover:bg-slate-100 text-gray-400 hover:text-gray-600 transition flex-shrink-0">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+      <div id="modalBody" class="px-6 py-5 overflow-y-auto flex-1">
+        <p id="modalText" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap"></p>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-100 flex justify-end flex-shrink-0">
+        <button onclick="closeModal()"
+          class="bg-primary hover:bg-primary-dark text-white text-sm font-semibold
+                 px-5 py-2.5 rounded-2xl transition shadow-md shadow-blue-500/20">
+          Kapat
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
