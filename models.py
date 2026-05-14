@@ -1,5 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, Integer, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
+
 from database import Base
 
 class User(Base):
@@ -23,6 +26,9 @@ class Record(Base):
     category = Column(String)
     status = Column(String, default="pending")
     transcribed_text = Column(String, nullable=True)
+    notes = Column(String, nullable=True)          # kullanıcı notu
+    assistant_notes = Column(String, nullable=True) # asistanın çıkardığı notlar
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=True)
 
     # Record'ın sahibi olan User ile ilişkisi
     owner = relationship("User", back_populates="records")

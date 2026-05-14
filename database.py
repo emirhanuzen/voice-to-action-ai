@@ -1,22 +1,31 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Dummy PostgreSQL bağlantı URL'si
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:194001@localhost:5432/voicetoaction_db"
+# ── Bağlantı URL'si ──────────────────────────────────────────────────────────
+SQLALCHEMY_DATABASE_URL = "postgresql://postgres:194001@127.0.0.1:5432/voicetoaction_db"
 
-# SQLAlchemy engine objesini oluşturuyoruz
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# ── Engine ───────────────────────────────────────────────────────────────────
+# pool_pre_ping=True → bağlantı kopmuşsa otomatik yenile; "server closed the
+# connection unexpectedly" hatasını önler.
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    pool_pre_ping=True,
+)
 
-# Veritabanı oturumlarını yönetmek için SessionLocal sınıfı
+# ── Session fabrikası ─────────────────────────────────────────────────────────
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Modellerimizin miras alacağı temel sınıf
+# ── Model tabanı ──────────────────────────────────────────────────────────────
 Base = declarative_base()
 
-# FastAPI bağımlılığı (dependency) olarak veritabanı oturumu sağlayan fonksiyon
+
+# ── FastAPI bağımlılığı: her istek → yeni session → garantili kapat ──────────
 def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()   # yarım işlemi geri al; üst katman hatayı yeniden fırlatır
+        raise
     finally:
-        db.close()
+        db.close()      # her durumda bağlantıyı havuza iade et

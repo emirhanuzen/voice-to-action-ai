@@ -1,0 +1,20 @@
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+python-multipart
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy
+
+# ── Authentication ────────────────────────────────────────────────────────────
+python-jose[cryptography]
+passlib[bcrypt]
+
+# ── HTTP Client ───────────────────────────────────────────────────────────────
+requests
+
+# ── AI: Ses Tanıma (faster-whisper: C++ tabanlı, VAD filtreli, düşük RAM) ─────
+faster-whisper
+
+# ── Schema / Validation ───────────────────────────────────────────────────────
+pydantic

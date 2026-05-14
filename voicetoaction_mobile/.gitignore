@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+model_files/
+uploads/
+voicetoaction.db
+voicetoaction.db-shm
+voicetoaction.db-wal

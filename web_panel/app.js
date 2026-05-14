@@ -14,6 +14,9 @@ let myChart = null;
 // Transkript modalı için kayıtları önbelleğe al
 let _cachedRecords = [];
 
+// toggleTask için görev verisini id → nesne olarak tut
+let _taskDataMap = {};
+
 // Kategorilere renk atama haritası
 const CATEGORY_COLORS = {
   'Eğitim':    '#2563EB',
@@ -354,6 +357,9 @@ async function fetchData() {
       t => t.title && t.title.trim().length > 2
     );
 
+    // Görev durumunu toggle için sakla (id → görev nesnesi)
+    _taskDataMap = Object.fromEntries(validTasks.map(t => [t.id, { ...t }]));
+
     // 2) FILTER (ikinci kullanım) — bekleyen (pending) görevleri say
     const pendingTasks = validTasks.filter(t => t.status !== 'done');
 
@@ -379,9 +385,12 @@ async function fetchData() {
         ? 'bg-emerald-50 text-emerald-600'
         : 'bg-amber-50 text-amber-600';
       const badgeTxt  = isDone ? 'Tamamlandı' : 'Bekliyor';
+      const btnBg     = isDone
+        ? 'bg-emerald-50 hover:bg-emerald-100'
+        : 'bg-slate-100 hover:bg-primary-light';
       const iconCls   = isDone
-        ? 'fa-circle-check text-emerald-500'
-        : 'fa-circle-dot text-primary';
+        ? 'fa-solid fa-circle-check text-emerald-500'
+        : 'fa-regular fa-circle text-gray-300';
 
       // Görevin çıkarıldığı kaydın transkript önizlemesi
       const rec     = recordTranscriptMap[t.record_id];
@@ -392,13 +401,20 @@ async function fetchData() {
         : null;
 
       return `
-        <div class="flex items-start gap-4 px-5 py-3.5 hover:bg-slate-50/80 transition-colors">
-          <div class="w-9 h-9 rounded-2xl bg-primary-light flex items-center
-                      justify-center flex-shrink-0 mt-0.5">
-            <i class="fa-solid ${iconCls} text-sm"></i>
-          </div>
+        <div id="task-row-dash-${t.id}"
+          class="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors">
+          <button
+            data-task-btn
+            onclick="toggleTask(${t.id})"
+            title="${isDone ? 'Tamamlandı — geri almak için tıkla' : 'Tamamlandı olarak işaretle'}"
+            class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0
+                   mt-0.5 transition-all duration-200 ${btnBg}">
+            <i class="${iconCls} text-base transition-all duration-200"></i>
+          </button>
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-gray-800 leading-snug truncate">
+            <p data-task-title
+              class="text-sm font-semibold leading-snug truncate
+                     ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}">
               ${escHtml(t.title)}
             </p>
             <p class="text-[11px] text-gray-400 mt-0.5">
@@ -410,8 +426,9 @@ async function fetchData() {
                  </p>`
               : ''}
           </div>
-          <span class="text-[10px] font-semibold px-2.5 py-1 rounded-full
-                       flex-shrink-0 ${badgeCls}">
+          <span data-task-badge
+            class="text-[10px] font-semibold px-2.5 py-1 rounded-full
+                   flex-shrink-0 ${badgeCls}">
             ${badgeTxt}
           </span>
         </div>`;
@@ -741,11 +758,16 @@ function renderAllTasks(validTasks) {
     const dateLabel = t.due_date || 'Tarih belirtilmedi';
     const badgeCls  = isDone ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-500';
     const badgeTxt  = isDone ? 'Tamamlandı' : 'Bekliyor';
-    const dotCls    = isDone ? 'bg-emerald-400' : 'bg-amber-400';
+    const btnBg     = isDone
+      ? 'bg-emerald-50 hover:bg-emerald-100'
+      : 'bg-slate-100 hover:bg-primary-light';
+    const iconCls   = isDone
+      ? 'fa-solid fa-circle-check text-emerald-500'
+      : 'fa-regular fa-circle text-gray-300';
 
     // Kaynak kaydın transkript önizlemesi
-    const srcRecord = recMap[t.record_id];
-    const srcFile   = srcRecord ? srcRecord.file_name : null;
+    const srcRecord  = recMap[t.record_id];
+    const srcFile    = srcRecord ? srcRecord.file_name : null;
     const srcExcerpt = srcRecord && srcRecord.transcript
       ? (srcRecord.transcript.length > 70
           ? srcRecord.transcript.substring(0, 70) + '…'
@@ -753,12 +775,21 @@ function renderAllTasks(validTasks) {
       : null;
 
     return `
-      <div class="px-5 py-4 hover:bg-slate-50/80 transition-colors">
+      <div id="task-row-all-${t.id}" class="px-5 py-4 hover:bg-slate-50/80 transition-colors">
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-3 min-w-0 flex-1">
-            <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 ${dotCls}"></div>
+            <button
+              data-task-btn
+              onclick="toggleTask(${t.id})"
+              title="${isDone ? 'Tamamlandı — geri almak için tıkla' : 'Tamamlandı olarak işaretle'}"
+              class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
+                     mt-0.5 transition-all duration-200 ${btnBg}">
+              <i class="${iconCls} text-sm transition-all duration-200"></i>
+            </button>
             <div class="min-w-0 flex-1">
-              <p class="text-sm font-semibold text-gray-800 ${isDone ? 'line-through text-gray-400' : ''}">
+              <p data-task-title
+                class="text-sm font-semibold
+                       ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}">
                 ${escHtml(t.title)}
               </p>
               <p class="text-xs text-gray-400 mt-0.5">
@@ -776,7 +807,8 @@ function renderAllTasks(validTasks) {
                 : ''}
             </div>
           </div>
-          <span class="text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${badgeCls}">
+          <span data-task-badge
+            class="text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${badgeCls}">
             ${badgeTxt}
           </span>
         </div>
@@ -898,6 +930,122 @@ function renderChart(categoryCounts, totalRecords) {
       ${escHtml(label)} (${values[i]})
     </span>
   `).join('');
+}
+
+// ─────────────────────────────────────────────────────────
+// GÖREV TİKLEME — Optimistic UI + API Senkronizasyonu
+// PUT /api/tasks/{task_id}/toggle  (JWT Bearer token)
+// ─────────────────────────────────────────────────────────
+async function toggleTask(taskId) {
+  const task = _taskDataMap[taskId];
+  if (!task) return;
+
+  const wasDone = task.status === 'done';
+  const newDone = !wasDone;
+
+  // Her iki görünümde de satır varsa güncelle (Dashboard + Görevlerim)
+  const rowEls = [
+    document.getElementById(`task-row-dash-${taskId}`),
+    document.getElementById(`task-row-all-${taskId}`),
+  ].filter(Boolean);
+
+  // Optimistic: anında DOM'u güncelle
+  task.status = newDone ? 'done' : 'pending';
+  rowEls.forEach(el => _applyTaskRowToggle(el, newDone));
+
+  // Bekleyen sayacını güncelle
+  const pendingEl = document.getElementById('pendingTasks');
+  if (pendingEl) {
+    pendingEl.textContent = String(
+      Math.max(0, Number(pendingEl.textContent) + (newDone ? -1 : 1))
+    );
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/tasks/${taskId}/toggle`, {
+      method:  'PUT',
+      headers: { ...authHeaders(), accept: 'application/json' },
+    });
+
+    if (res.status === 401) { handleUnauthorized(); return; }
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data      = await res.json();
+    const realDone  = data.status === 'done';
+
+    // Sunucunun gerçek durumu farklıysa düzelt
+    if (realDone !== newDone) {
+      task.status = realDone ? 'done' : 'pending';
+      rowEls.forEach(el => _applyTaskRowToggle(el, realDone));
+      if (pendingEl) {
+        pendingEl.textContent = String(
+          Math.max(0, Number(pendingEl.textContent) + (realDone ? -1 : 1))
+        );
+      }
+    }
+
+    console.log(`[toggleTask] #${taskId}: ${data.message ?? data.status}`);
+  } catch (e) {
+    console.error('[toggleTask] Hata:', e.message);
+    // Geri al
+    task.status = wasDone ? 'done' : 'pending';
+    rowEls.forEach(el => _applyTaskRowToggle(el, wasDone));
+    if (pendingEl) {
+      pendingEl.textContent = String(
+        Math.max(0, Number(pendingEl.textContent) + (newDone ? 1 : -1))
+      );
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// YARDIMCI: Tek bir görev satırının DOM stillerini günceller
+// data-task-btn, data-task-title, data-task-badge nitelikleri
+// üzerinden hedefleme yapılır — Tailwind class karışıklığı olmaz.
+// ─────────────────────────────────────────────────────────
+function _applyTaskRowToggle(rowEl, isDone) {
+  if (!rowEl) return;
+
+  // ── Başlık (line-through + renk) ──────────────────────
+  const titleEl = rowEl.querySelector('[data-task-title]');
+  if (titleEl) {
+    titleEl.classList.toggle('line-through', isDone);
+    titleEl.classList.toggle('text-gray-400', isDone);
+    titleEl.classList.toggle('text-gray-800', !isDone);
+  }
+
+  // ── Toggle butonu arka planı ───────────────────────────
+  const btnEl = rowEl.querySelector('[data-task-btn]');
+  if (btnEl) {
+    btnEl.classList.toggle('bg-emerald-50',        isDone);
+    btnEl.classList.toggle('hover:bg-emerald-100', isDone);
+    btnEl.classList.toggle('bg-slate-100',         !isDone);
+    btnEl.classList.toggle('hover:bg-primary-light', !isDone);
+    btnEl.title = isDone
+      ? 'Tamamlandı — geri almak için tıkla'
+      : 'Tamamlandı olarak işaretle';
+
+    // ── İkon ──────────────────────────────────────────────
+    const iconEl = btnEl.querySelector('i');
+    if (iconEl) {
+      iconEl.className = isDone
+        ? 'fa-solid fa-circle-check text-emerald-500 text-base transition-all duration-200'
+        : 'fa-regular fa-circle text-gray-300 text-base transition-all duration-200';
+    }
+  }
+
+  // ── Durum rozeti ──────────────────────────────────────
+  const badgeEl = rowEl.querySelector('[data-task-badge]');
+  if (badgeEl) {
+    badgeEl.classList.toggle('bg-emerald-50',    isDone);
+    badgeEl.classList.toggle('text-emerald-600', isDone);
+    badgeEl.classList.toggle('bg-amber-50',      !isDone);
+    // hem text-amber-600 hem text-amber-500 kullanılıyor; ikisini de yönet
+    badgeEl.classList.toggle('text-amber-600',   !isDone);
+    badgeEl.classList.toggle('text-amber-500',   !isDone);
+    badgeEl.textContent = isDone ? 'Tamamlandı' : 'Bekliyor';
+  }
 }
 
 // ─────────────────────────────────────────────────────────
