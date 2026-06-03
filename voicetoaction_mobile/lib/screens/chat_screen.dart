@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:flutter_markdown/flutter_markdown.dart';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -24,13 +26,24 @@ _CmdMeta _resolveMeta(String cmd) {
   const List<Color> green = <Color>[Color(0xFF16A34A), Color(0xFF059669)];
   const List<Color> cyan = <Color>[Color(0xFF0EA5E9), Color(0xFF2563EB)];
   const List<Color> slate = <Color>[Color(0xFF64748B), Color(0xFF475569)];
+  const List<Color> orange = <Color>[Color(0xFFEA580C), Color(0xFFF97316)];
+  const List<Color> sky = <Color>[Color(0xFF0284C7), Color(0xFF38BDF8)];
+  const List<Color> indigo = <Color>[Color(0xFF4F46E5), Color(0xFF818CF8)];
 
   if (cmd == 'CMD_TASKS')   return const _CmdMeta('📋 Görevlerim', blue);
   if (cmd == 'CMD_RECORDS') return const _CmdMeta('🎙️ Kayıtlarım', blue);
   if (cmd == 'CMD_MENU')    return const _CmdMeta('🏠 Ana Menü', slate);
 
-  final RegExpMatch? sel  = RegExp(r'^CMD_SELECT_(\d+)\|(.+)$').firstMatch(cmd);
-  if (sel  != null) return _CmdMeta('🎙️ ${sel.group(2)}', blue);
+  if (RegExp(r'^CMD_SELECT_(\d+)$').hasMatch(cmd)) {
+    final String id = RegExp(r'^CMD_SELECT_(\d+)$').firstMatch(cmd)?.group(1) ?? '';
+    return _CmdMeta('🎙️ Kayıt #$id', blue);
+  }
+
+  if (RegExp(r'^CMD_SELECT_(\d+)\|(.+)$').hasMatch(cmd)) {
+    final RegExpMatch? match = RegExp(r'^CMD_SELECT_(\d+)\|(.+)$').firstMatch(cmd);
+    final String name = match?.group(2) ?? 'Kayıt Seç';
+    return _CmdMeta('🎙️ $name', blue);
+  }
 
   final RegExpMatch? summ = RegExp(r'^CMD_SUMMARIZE_(\d+)$').firstMatch(cmd);
   if (summ != null) return const _CmdMeta('📝 Özetle', violet);
@@ -48,10 +61,49 @@ _CmdMeta _resolveMeta(String cmd) {
   if (topics != null) return const _CmdMeta('📊 Konu Analizi', violet);
 
   final RegExpMatch? exam = RegExp(r'^CMD_EXAM_(\d+)$').firstMatch(cmd);
-  if (exam != null) return const _CmdMeta('🎓 Sınav Kartları', violet);
+  if (exam != null) return const _CmdMeta('☕ Quiz Molası', violet);
 
-  // Bilinmeyen CMD → olduğu gibi göster
-  return _CmdMeta(cmd, slate);
+  if (RegExp(r'^CMD_CODE_EXTRACT_(\d+)$').hasMatch(cmd))
+    return const _CmdMeta('💻 Kod Çıkarıcı', cyan);
+
+  if (RegExp(r'^CMD_CONCEPT_EXTRACT_(\d+)$').hasMatch(cmd))
+    return const _CmdMeta('📚 Ders Notu & Kavramlar', green);
+
+  if (RegExp(r'^CMD_SAVE_NOTE_(\d+)$').hasMatch(cmd))
+    return const _CmdMeta('💾 Notlara Kaydet', orange);
+
+  if (RegExp(r'^CMD_SIMPLIFY_(\d+)$').hasMatch(cmd))
+    return const _CmdMeta('🧠 Mala Anlatır Gibi Anlat', sky);
+
+  if (RegExp(r'^CMD_RESOURCES_(\d+)$').hasMatch(cmd))
+    return const _CmdMeta('🎬 Kaynak Öner', amber);
+
+  if (RegExp(r'^CMD_QANS_(\d+)_([A-D])_([A-D])$').hasMatch(cmd)) {
+    final String choice = RegExp(r'^CMD_QANS_\d+_([A-D])_[A-D]$').firstMatch(cmd)?.group(1) ?? '';
+    return _CmdMeta('$choice)', indigo);
+  }
+
+  if (RegExp(r'^CMD_TECH_EXTRACT_(\d+)$').hasMatch(cmd))
+    return const _CmdMeta('💻 Teknik Analiz', cyan);
+
+  if (RegExp(r'^CMD_TEAM_MATRIX_(\d+)$').hasMatch(cmd))
+    return const _CmdMeta('👥 Ekip Matrisi', blue);
+
+  // Pipe ile gelen display text varsa kullan
+  if (cmd.contains('|')) {
+    final List<String> parts = cmd.split('|');
+    final String rawCmd = parts[0];
+    final String displayText = parts[1];
+    final _CmdMeta meta = _resolveMeta(rawCmd);
+    if (meta.label != rawCmd) return meta;
+    return _CmdMeta(displayText, slate);
+  }
+
+  // Hiçbiri eşleşmediyse ham CMD'yi temizle
+  return _CmdMeta(
+    cmd.split('|').last.replaceAll('CMD_', '').replaceAll('_', ' '),
+    slate,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,13 +150,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Buton tıklandığında: CMD kodu API'ye, insan etiketi baloncuğa.
   void _onOptionTap(String cmd) {
-    if (context.read<AppState>().isBotTyping) return;
-    final bool isDoc = RegExp(r'^CMD_MEETING_\d+$').hasMatch(cmd);
+    final String rawCmd = cmd.split('|')[0].trim();
+    final _CmdMeta meta = _resolveMeta(rawCmd);
     context.read<AppState>().sendChatMessage(
-          cmd,
-          displayText: _resolveMeta(cmd).label,
-          isDocumentResponse: isDoc,
-        );
+      rawCmd,
+      displayText: meta.label,
+    );
   }
 
   int _lastBotIndex(List<ChatMessage> msgs) {
@@ -507,7 +558,50 @@ class _TextBubble extends StatelessWidget {
           ),
         ],
       ),
-      child: _parseContent(msg.text, isUser, isDarkMode: isDarkMode),
+      child: isUser
+          ? _parseContent(msg.text, isUser, isDarkMode: isDarkMode)
+          : MarkdownBody(
+              data: msg.text,
+              styleSheet: MarkdownStyleSheet(
+                p: TextStyle(
+                  color: isDarkMode
+                      ? const Color(0xFFF1F5F9)
+                      : const Color(0xFF1E293B),
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+                strong: const TextStyle(fontWeight: FontWeight.w700),
+                code: TextStyle(
+                  backgroundColor: const Color(0xFF334155),
+                  color: const Color(0xFF93C5FD),
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
+                codeblockDecoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                listBullet: TextStyle(
+                  color: isDarkMode
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF64748B),
+                ),
+                h1: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white),
+                h2: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white),
+                h3: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white),
+              ),
+              shrinkWrap: true,
+            ),
     );
   }
 }

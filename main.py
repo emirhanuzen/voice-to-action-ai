@@ -1,9 +1,15 @@
+import google.generativeai as genai
 import json
+import numpy as np
 import os
 import re
 import shutil
+import subprocess
+import tempfile
 import uuid
-from collections import Counter
+import zeyrek
+from collections import Counter, defaultdict
+from fastembed import TextEmbedding
 from datetime import date, datetime, timedelta
 
 # FFMPEG adresini Python'a zorla öğretiyoruz (faster-whisper için)
@@ -11,7 +17,7 @@ os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
 
 from faster_whisper import WhisperModel
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -23,8 +29,154 @@ from database import engine, get_db
 import models
 import schemas
 
+_last_concept_cache: dict = {}
+
+# ── Zeyrek NLP: Global değişkenler ve morfolojik analiz ───────────────────────
+
+_zeyrek = zeyrek.MorphAnalyzer()
+
+# ═══════════════════════════════════════════════════════
+# PROFESYONEL NLP PIPELINE v7
+# Katman 1: Kara liste → Katman 2: Zeyrek → Katman 3: Skor → Katman 4: FastEmbed Dedup
+# ═══════════════════════════════════════════════════════
+
+# — Aksiyon kökleri —
+AKSIYON_KOKLERI = {
+    'yap', 'et', 'git', 'gel', 'al', 'ver', 'bak', 'bul', 'bil',
+    'aç', 'kapat', 'koy', 'çıkar', 'gir', 'geç', 'dur', 'oku',
+    'yaz', 'çalış', 'öğren', 'araştır', 'incele', 'hazırla',
+    'tamamla', 'bitir', 'başla', 'sun', 'anlat', 'teslim',
+    'gönder', 'ilet', 'bildir', 'ara', 'söyle', 'sor', 'cevapla',
+    'katıl', 'unut', 'hatırla', 'not', 'kaydet', 'kontrol',
+    'indir', 'yükle', 'kur', 'sil', 'güncelle', 'düzenle', 'ekle',
+    'getir', 'götür', 'öde', 'rezerv', 'ayarla', 'izle', 'dinle',
+    'tekrar', 'gözden', 'imzala', 'doldur', 'çöz',
+}
+
+# — Zorunluluk regex —
+ZORUNLULUK_REGEX = [
+    r'\b\w+malı(sın|yız|sınız|lar)?\b',
+    r'\b\w+meli(sin|yiz|siniz|ler)?\b',
+    r'\b\w+ması\s+(lazım|gerek)\b',
+    r'\b\w+mesi\s+(lazım|gerek)\b',
+    r'\b\w+mayı\s+unutma\b',
+    r'\b\w+meyi\s+unutma\b',
+    r'\b\w+mayın\b', r'\b\w+meyin\b',
+    r'\blazım\b', r'\bgerekiyor\b', r'\bgerekli\b',
+    r'\bzorunlu\b', r'\bunutma\b', r'\bunutmayın\b',
+    r'\b\w+acak\b', r'\b\w+ecek\b',
+]
+
+# — Zaman regex —
+ZAMAN_REGEX = [
+    r'\b(yarın|bugün|öbür\s?gün|bu\s+hafta|gelecek\s+hafta|bu\s+ay)\b',
+    r'\bsaat\s+\d{1,2}(:\d{2})?\b',
+    r'\b\d{1,2}\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)\b',
+    r'\b(pazartesi|salı|çarşamba|perşembe|cuma|cumartesi|pazar)\b',
+    r'\b\d{1,2}[./]\d{1,2}\b',
+]
+
+# — Akademik bağlam —
+BAGALM_REGEX = [
+    r'\b(ödev|sınav|vize|final|proje|rapor|sunum|tez|toplantı|randevu|teslim|deadline)\b',
+]
+
+# — KESİN RED kalıpları —
+KARA_LISTE = [
+    r'^(merhaba|selam|iyi\s+günler|günaydın|hoş\s+geldiniz?)\b',
+    r'\b(bahsettik|konuştuk|anlattık|işledik|gördük|öğrendik)\b',
+    r'\b(diyoruz|deniyor|adlandırılıyor|tanımlanıyor|ifade\s+eder|anlamına\s+gelir)\b',
+    r'^(yani|aslında|özellikle|mesela|örneğin|kısacası|özetle)\b',
+    r'\b(bugünkü|bu\s+günkü)\s+(dersimiz|konumuz|başlığımız)\b',
+    r'\bnedir\b', r'\bşudur\b', r'\bbudur\b',
+    r'\b(mıydı|miydi|muyduk)\b',
+]
+
+# — Üçüncü şahıs özneler (bunların aksiyonu bize ait değil) —
+UCUNCU_SAHIS = [
+    r'\b(hoca|öğretmen|müdür|patron|şef|arkadaş|o|onlar|onların)\b',
+    r'\b(verecek|söyleyecek|anlatacak|gösterecek|yapacak)\b.*\b(hoca|öğretmen|o)\b',
+]
+
+
+def _analyze_sentence_v7(sentence: str) -> tuple[bool, int]:
+    s = sentence.strip()
+    s_lower = s.lower()
+    words = s.split()
+
+    # — Minimum uzunluk —
+    if len(words) < 3 or len(s) < 10:
+        return False, 0
+
+    # — KATMAN 1: Kara liste —
+    for pattern in KARA_LISTE:
+        if re.search(pattern, s_lower, re.IGNORECASE):
+            return False, 0
+
+    # — Üçüncü şahıs özne kontrolü —
+    for pattern in UCUNCU_SAHIS:
+        if re.search(pattern, s_lower, re.IGNORECASE):
+            return False, 0
+
+    score = 0
+    has_action = False
+    has_obligation = False
+
+    # — KATMAN 2: Zeyrek morfoloji —
+    for word in words:
+        word_clean = re.sub(r'[^\wğüşıöçĞÜŞİÖÇ]', '', word.lower())
+        if len(word_clean) < 2:
+            continue
+        try:
+            analyses = _zeyrek.analyze(word_clean)
+            for analysis in analyses:
+                for parse in analysis:
+                    parse_str = str(parse)
+                    try:
+                        lemma = parse[0].lower() if parse else ''
+                    except Exception:
+                        lemma = ''
+                    if lemma in AKSIYON_KOKLERI:
+                        has_action = True
+                        score += 35
+                    if any(m in parse_str for m in ['Neces', 'Imp', 'Opt']):
+                        has_obligation = True
+                        score += 45
+        except Exception:
+            pass
+
+    # — KATMAN 3: Regex yedek + skor —
+    for pattern in ZORUNLULUK_REGEX:
+        if re.search(pattern, s_lower, re.IGNORECASE):
+            has_obligation = True
+            score += 35
+            break
+
+    for pattern in ZAMAN_REGEX:
+        if re.search(pattern, s_lower, re.IGNORECASE):
+            score += 25
+            break
+
+    for pattern in BAGALM_REGEX:
+        if re.search(pattern, s_lower, re.IGNORECASE):
+            score += 20
+            break
+
+    if s.endswith('?'):
+        score -= 25
+
+    if len(words) < 4:
+        score -= 20
+
+    if not has_action and not has_obligation:
+        return False, 0
+
+    print(f"[NLP-v7] '{s[:60]}' → score={score} {'✅' if score >= 50 else '❌'}")
+    return score >= 50, score
+
+
 # ── Chatbot: İstek şeması ─────────────────────────────────────────────────────
-class ChatRequest(BaseModel):
+class ChatRequest(BaseModel):   
     message: str
 
 app = FastAPI(title="Voice To Action API", version="1.0.0")
@@ -46,6 +198,39 @@ _WHISPER_MODEL: WhisperModel | None = None
 # tekrar indirilmeye çalışılmaz, direkt 503 döner.
 _WHISPER_LOAD_ERROR: str | None = None
 
+# ── FastEmbed: Semantik dedup için lokal embedding modeli ─────────────────────
+print("[Lokal AI] FastEmbed modeli yükleniyor...")
+_embedding_model = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+print("[Lokal AI] FastEmbed hazır!")
+
+def _get_embedding(text: str) -> np.ndarray:
+    vec = list(_embedding_model.embed([text]))[0]
+    return vec
+
+def _cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
+    dot = np.dot(vec1, vec2)
+    n1 = np.linalg.norm(vec1)
+    n2 = np.linalg.norm(vec2)
+    if n1 == 0 or n2 == 0:
+        return 0.0
+    return dot / (n1 * n2)
+
+GEMINI_API_KEY = "AIzaSyAC_Wa2jfmYm9CUJoEhbZxaaDCvzP_ZQrE"
+
+genai.configure(api_key=GEMINI_API_KEY)
+
+_gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+
+def _ask_gemini(prompt: str) -> str:
+    try:
+        response = _gemini_model.generate_content(prompt)
+        print(f"[Gemini] Başarılı yanıt: {len(response.text)} karakter")
+        return response.text.strip()
+    except Exception as e:
+        print(f"[Gemini] Hata: {e}")
+        return None
+
+
 def _get_whisper_model() -> WhisperModel:
     """
     faster-whisper 'tiny' modelini ilk kullanımda güvenli şekilde yükler.
@@ -62,7 +247,7 @@ def _get_whisper_model() -> WhisperModel:
         try:
             print("[Whisper] faster-whisper 'base' modeli yükleniyor (CPU, int8)…")
             _WHISPER_MODEL = WhisperModel(
-                "tiny",
+                "base",
                 device="cpu",
                 compute_type="int8",
                 # Modeli gizli .cache yerine proje klasöründe görebileceğimiz
@@ -84,6 +269,23 @@ def _get_whisper_model() -> WhisperModel:
     return _WHISPER_MODEL
 
 
+def _convert_to_wav(input_path: str) -> str:
+    output_path = input_path + "_converted.wav"
+    try:
+        subprocess.run([
+            r"C:\ffmpeg\bin\ffmpeg.exe", "-y",
+            "-i", input_path,
+            "-ar", "16000",
+            "-ac", "1",
+            "-f", "wav",
+            output_path
+        ], check=True, capture_output=True)
+        return output_path
+    except Exception as e:
+        print(f"[FFmpeg] Dönüştürme hatası: {e}")
+        return input_path
+
+
 # ── Ses transkripsiyon yardımcısı: VAD filtreli (pydub'siz) ───────────────────
 def _transcribe_audio(file_path: str) -> str:
     """
@@ -95,8 +297,9 @@ def _transcribe_audio(file_path: str) -> str:
     """
     model = _get_whisper_model()
     print("[Whisper] Transkripsiyon başlatılıyor (VAD filtreli)…")
+    converted_path = _convert_to_wav(file_path)
     segments, info = model.transcribe(
-        file_path,
+        converted_path,
         language="tr",
         beam_size=5,
         vad_filter=True,
@@ -165,6 +368,9 @@ def _transcribe_audio(file_path: str) -> str:
             unique_sentences.append(sent)
 
     text = '. '.join(unique_sentences).strip()
+
+    if converted_path != file_path and os.path.exists(converted_path):
+        os.remove(converted_path)
 
     print(f"[Whisper] Tamamlandı. Dil: {info.language} | Metin: {len(text)} karakter")
     return text
@@ -381,6 +587,31 @@ _VARIANT_TO_MONTH: dict[str, str] = {
     for correct, variants in _MONTH_VARIANTS.items()
     for v in variants
 }
+_VARIANT_TO_MONTH.update({
+    'maistole': 'mayıs',
+    'maisto':   'mayıs',
+    'maist':    'mayıs',
+    'mais':     'mayıs',
+    'mayisto':  'mayıs',
+    'mayis':    'mayıs',
+    'ocack':    'ocak',
+    'ocakk':    'ocak',
+    'subat':    'şubat',
+    'subatt':   'şubat',
+    'hazran':   'haziran',
+    'haziran':  'haziran',
+    'temmuz':   'temmuz',
+    'agustos':  'ağustos',
+    'agüstos':  'ağustos',
+    'eylull':   'eylül',
+    'eylul':    'eylül',
+    'kasimm':   'kasım',
+    'kasim':    'kasım',
+    'aralik':   'aralık',
+    'aralk':    'aralık',
+    'nisan':    'nisan',
+    'nisann':   'nisan',
+})
 
 # difflib için tüm varyantların düz listesi
 _ALL_VARIANTS: list[str] = list(_VARIANT_TO_MONTH.keys())
@@ -495,33 +726,34 @@ def _resolve_date(lower: str, today: date) -> date | None:
     # ── "15 mayıs", "3 haziran" gibi gün+ay ifadeleri ──────────────────────
     gun_ay_pattern = re.compile(
         r'(\d{1,2})\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|'
-        r'ağustos|eylül|ekim|kasım|aralık)',
+        r'ağustos|eylül|ekim|kasım|aralık|mais\w*|hazr\w*|agus\w*|eylu\w*|arali\w*)',
         re.IGNORECASE | re.UNICODE
     )
     m_ga = gun_ay_pattern.search(lower)
     if m_ga:
         gun = int(m_ga.group(1))
         ay_adi = m_ga.group(2).lower()
+        ay_adi = _normalize_months(ay_adi).strip()
         ay_num = _MONTH_MAP.get(ay_adi)
         if ay_num:
-            year = today.year
-            if ay_num < today.month or (ay_num == today.month and gun < today.day):
-                year += 1
+            today_dt = datetime.now()
+            current_year = today_dt.year
             try:
-                return date(year, ay_num, gun)
+                candidate = datetime(current_year, ay_num, gun)
+                return candidate.date()
             except ValueError:
                 pass
 
     # ── Ay adları → o ayın 15'i (yaklaşık) ────────────────────────────────
     for month_name, month_num in _MONTH_MAP.items():
         if month_name in lower:
-            year = today.year
-            if month_num < today.month:
-                year += 1   # geçmiş ay adı → gelecek yıla at
+            today_dt = datetime.now()
+            current_year = today_dt.year
+            candidate = datetime(current_year, month_num, 15)
             try:
-                return date(year, month_num, 15)
+                return candidate.date()
             except ValueError:
-                return date(year, month_num, 1)
+                return date(current_year, month_num, 1)
 
     return None
 
@@ -686,7 +918,7 @@ def extract_tasks_from_text(text: str) -> list[dict]:
     text = re.sub(r'\s+', ' ', text).strip()
     raw_sentences = re.split(r'[.!?;\n]+', text)
     tasks = []
-    seen_tokens: list[set] = []
+    seen_tasks_data = []  # {'text': str, 'vector': np.ndarray}
 
     # Türkçe'de geçerli olmayan bozuk kelime tespiti
     def _is_garbled(word: str) -> bool:
@@ -739,6 +971,12 @@ def extract_tasks_from_text(text: str) -> list[dict]:
             continue
 
         lower = s.lower()
+
+        # NLP-v7 aksiyon filtresi — en başta çalışır
+        is_action, confidence = _analyze_sentence_v7(s)
+        if not is_action:
+            continue
+
         words = lower.split()
         word_count = len(words)
 
@@ -827,20 +1065,25 @@ def extract_tasks_from_text(text: str) -> list[dict]:
         if score < threshold:
             continue
 
-        # Semantik dedup (Jaccard)
-        cleaned = _clean_sentence(s)
-        new_tok = _tokenize(cleaned.lower())
-        duplicate = False
-        for prev in seen_tokens:
-            if prev and new_tok:
-                j = len(new_tok & prev) / len(new_tok | prev)
-                if j > 0.55:
-                    duplicate = True
+        # Semantik dedup (FastEmbed kosinüs benzerliği)
+        cleaned = s.strip()
+        try:
+            current_vec = _get_embedding(cleaned)
+            is_duplicate = False
+            for prev in seen_tasks_data:
+                sim = _cosine_similarity(current_vec, prev['vector'])
+                if sim > 0.82:
+                    is_duplicate = True
+                    print(f"[FastEmbed] Tekrar yakalandı %{sim*100:.1f}: '{cleaned[:40]}'")
                     break
-        if duplicate:
-            continue
-
-        seen_tokens.append(new_tok)
+            if is_duplicate:
+                continue
+            seen_tasks_data.append({'text': cleaned, 'vector': current_vec})
+        except Exception as e:
+            print(f"[FastEmbed] Hata: {e}")
+            if cleaned in [x['text'] for x in seen_tasks_data]:
+                continue
+            seen_tasks_data.append({'text': cleaned, 'vector': None})
 
         # Başlık
         w = cleaned.split()
@@ -1056,16 +1299,22 @@ def transcribe(
 @app.get("/api/records/{record_id}/audio")
 def stream_audio(
     record_id: int,
-    token: str = Query(..., description="JWT access token"),
+    token: str = Query(None, description="JWT access token"),
+    authorization: str = Header(None),
     db: Session = Depends(get_db),
 ):
     """
     Ses dosyasını stream eder.
-    audioplayers header desteklemediğinden token query param olarak alınır.
+    Token query param (?token=...) veya Authorization header ile gönderilebilir.
     """
     from auth import ALGORITHM, SECRET_KEY
     from jose import JWTError
     from jose import jwt as _jwt
+
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    if not token:
+        raise HTTPException(status_code=401, detail="Token gerekli.")
 
     try:
         payload = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -1644,24 +1893,65 @@ def _cmd_records(db, user) -> dict:
     }
 
 
-def _cmd_select(record_id: int, db, user) -> dict:
-    record = _get_record(record_id, user.id, db)
+def _cmd_select(record_id: int, user_id: int, db: Session) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user_id
+    ).first()
+
     if not record:
-        return _no_record_resp(record_id)
-    cat = (record.category or "Diğer").strip()
-    fn = record.filename.rsplit(".", 1)[0] if record.filename else "Kayıt"
-    if not (record.transcribed_text or "").strip():
-        return {
-            "answer": (
-                f"✅ {fn} ({cat}) seçildi\n\n"
-                "⚠️ Bu kaydın transkript metni henüz yok."
-            ),
-            "options": ["CMD_RECORDS", "CMD_MENU"],
-        }
-    return {
-        "answer": f"✅ {fn} ({cat}) seçildi\n\nBu kayıtla ne yapmak istersiniz?",
-        "options": _action_options(record_id),
-    }
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
+
+    transcript = record.transcribed_text or ""
+    word_count = len(transcript.split())
+    title = record.filename or "Kayıt"
+    category = record.category or ""
+    title_lower = title.lower()
+    category_lower = category.lower()
+
+    highlights = []
+
+    if any(k in title_lower or k in category_lower for k in ['toplantı', 'meeting', 'görüşme']):
+        highlights.append("📋 Toplantı notu çıkarmak için hazır")
+    elif any(k in title_lower or k in category_lower for k in ['sınav', 'quiz', 'vize', 'final']):
+        highlights.append("🎓 Sınav kartları için hazır")
+    elif any(k in title_lower or k in category_lower for k in ['ders', 'eğitim', 'lecture']):
+        highlights.append("📚 Ders notu çıkarmak için hazır")
+
+    options = []
+
+    if any(k in transcript.lower() for k in ['algoritma', 'kod', 'yazılım', 'veri yapı', 'fonksiyon', 'class']):
+        options.append(f"CMD_CODE_EXTRACT_{record_id}")
+
+    if any(k in (title_lower + category_lower) for k in ['toplantı', 'meeting', 'ders', 'eğitim']):
+        options.append(f"CMD_CONCEPT_EXTRACT_{record_id}")
+
+    if word_count >= 30:
+        options.append(f"CMD_SUMMARIZE_{record_id}")
+
+    options.append(f"CMD_SIMPLIFY_{record_id}")
+    if word_count >= 20:
+        options.append(f"CMD_CALENDAR_{record_id}")
+
+    options.append(f"CMD_EXAM_{record_id}")
+    options.append(f"CMD_RESOURCES_{record_id}")
+    options.append("CMD_RECORDS")
+
+    preview = transcript[:150] + "..." if len(transcript) > 150 else transcript
+
+    highlight_text = "\n".join(highlights)
+    word_info = f"{word_count} kelime" if word_count > 0 else "Transkript yok"
+
+    answer = f"📁 **{title}**\n"
+    answer += f"🗂 Kategori: {category} · {word_info}\n"
+    if highlight_text:
+        answer += f"\n{highlight_text}\n"
+    if preview:
+        answer += f"\n📄 Önizleme:\n{preview}"
+    if word_count < 20:
+        answer += "\n\n⚠️ Kayıt çok kısa, bazı özellikler kullanılamaz."
+
+    return {"answer": answer, "options": options}
 
 
 def _analyze_tone(text: str) -> str:
@@ -1784,77 +2074,31 @@ def _cmd_summarize(record_id: int, db, user) -> dict:
         if selected else "• (Yeterli içerik bulunamadı)"
     )
 
-    answer = (
-        f"📄 **{fn}**\n\n"
-        f"📁 **Kategori:** {kategori}\n"
-        f"{emotion}\n\n"
-        f"**Ne konuşuldu:**\n"
-        f"{bullet_lines}\n\n"
-        f"🔑 **Öne Çıkan:** {keyword_str}\n"
-        f"📊 {word_count} kelime · {len(sentences)} cümle · {tasks_in_record} aksiyon çıkarıldı"
+    gemini_summary = _ask_gemini(
+        f"Şu Türkçe ders/toplantı kaydını 3-4 cümleyle özetle, "
+        f"ana konuları ve önemli noktaları vurgula:\n\n{text[:2000]}"
     )
+
+    if gemini_summary:
+        answer = (
+            f"📄 **{fn}**\n\n"
+            f"📝 **Özet:**\n{gemini_summary}\n\n"
+            f"🔑 **Anahtar Kelimeler:** {keyword_str}\n"
+            f"📁 Kategori: {record.category or 'Diğer'} · {word_count} kelime · {tasks_in_record} aksiyon"
+        )
+    else:
+        answer = (
+            f"📄 **{fn}**\n\n"
+            f"📁 **Kategori:** {kategori}\n"
+            f"{emotion}\n\n"
+            f"**Ne konuşuldu:**\n"
+            f"{bullet_lines}\n\n"
+            f"🔑 **Öne Çıkan:** {keyword_str}\n"
+            f"📊 {word_count} kelime · {len(sentences)} cümle · {tasks_in_record} aksiyon çıkarıldı"
+        )
     return {
         "answer": answer,
         "options": [o for o in _action_options(record_id) if "SUMMARIZE" not in o],
-    }
-
-
-def _cmd_analyze(record_id: int, db, user) -> dict:
-    record = _get_record(record_id, user.id, db)
-    if not record:
-        return _no_record_resp(record_id)
-    text = (record.transcribed_text or "").strip()
-    if not text:
-        return _empty_transcript_resp(record_id)
-
-    lower = text.lower()
-    results = []
-
-    sinav_pattern = re.compile(
-        r'(?:sınav|vize|final|quiz|bütünleme)[^.!?]*(?:var|olacak|yapılacak|'
-        r'[0-9]+\s*(?:mayıs|haziran|ocak|şubat|mart|nisan|temmuz|ağustos|eylül|ekim|kasım|aralık))',
-        re.IGNORECASE | re.UNICODE
-    )
-    for m in sinav_pattern.finditer(lower):
-        sentence = text[max(0, m.start()-20):m.end()+40].strip()
-        results.append({"icerik": sentence[:80], "kategori": "Sınav Tarihi", "tarih": ""})
-
-    odev_pattern = re.compile(
-        r'(?:ödev|teslim|proje|sunum)[^.!?]*(?:yarın|bugün|haftaya|'
-        r'pazartesi|salı|çarşamba|perşembe|cuma|[0-9]+\s*(?:gün|hafta))',
-        re.IGNORECASE | re.UNICODE
-    )
-    for m in odev_pattern.finditer(lower):
-        sentence = text[max(0, m.start()-20):m.end()+40].strip()
-        results.append({"icerik": sentence[:80], "kategori": "Ödev/Görev", "tarih": ""})
-
-    db_tasks = db.query(models.Task).filter(
-        models.Task.record_id == record_id,
-        models.Task.is_completed == False  # noqa: E712
-    ).all()
-
-    _CATEGORY_EMOJI = {
-        "sınav tarihi": "📅", "ödev/görev": "📝", "sınav notu": "📌"
-    }
-
-    task_lines = []
-    for item in results[:5]:
-        emoji = _CATEGORY_EMOJI.get(item["kategori"].lower(), "📋")
-        task_lines.append(f"{emoji} **{item['kategori']}:** {item['icerik']}")
-
-    if not task_lines and db_tasks:
-        for t in db_tasks[:5]:
-            due = t.deadline.strftime("%d.%m") if t.deadline else "Tarih yok"
-            task_lines.append(f"📋 {t.title} _(📅 {due})_")
-
-    if task_lines:
-        answer = "🎓 **Akademik Hatırlatmalar:**\n" + "\n".join(task_lines)
-    else:
-        answer = "Bu kayıtta önemli bir akademik hatırlatma bulunamadı."
-
-    return {
-        "answer": answer,
-        "options": [o for o in _action_options(record_id) if "ANALYZE" not in o],
     }
 
 
@@ -2019,7 +2263,15 @@ def _cmd_meeting(record_id: int, db, user) -> dict:
             due_str = t.deadline.strftime("%d.%m.%Y") if t.deadline else ""
             lines.append(f"- {due_str}: {t.title}")
 
-    notes_text = "\n".join(lines)
+    gemini_notes = _ask_gemini(
+        f"Bu Türkçe ders/toplantı kaydını profesyonel bir ders notu formatına dönüştür. "
+        f"Ana başlıklar, önemli bilgiler ve aksiyonlar şeklinde düzenle:\n\n{text[:2000]}"
+    )
+
+    if gemini_notes:
+        notes_text = f"📝 **Ders/Toplantı Notu:**\n\n{gemini_notes}"
+    else:
+        notes_text = "\n".join(lines)
     return {
         "answer": notes_text,
         "notes_text": notes_text,
@@ -2029,167 +2281,289 @@ def _cmd_meeting(record_id: int, db, user) -> dict:
 
 
 def _cmd_exam(record_id: int, db, user) -> dict:
-    """Metinden sınav hazırlık kartları (soru-cevap) üretir."""
-    record = _get_record(record_id, user.id, db)
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
     if not record:
-        return _no_record_resp(record_id)
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
+
     text = (record.transcribed_text or "").strip()
-    if not text:
-        return _empty_transcript_resp(record_id)
+    if not text or len(text.split()) < 20:
+        return {"answer": "Transkript quiz oluşturmak için çok kısa.", "options": [f"CMD_SELECT_{record_id}"]}
 
-    sentences = [s.strip() for s in re.split(r'[.!?\n]+', text) if len(s.strip()) > 10]
-    cards: list[dict] = []
+    prompt = f"""
+Sen bir eğitmensin. Şu ders/toplantı kaydına dayanarak 1 adet zorlayıcı çoktan seçmeli (A, B, C, D) soru hazırla.
+SADECE aşağıdaki JSON formatında çıktı ver. Başka hiçbir açıklama yazma:
+{{
+    "soru": "Soru metni buraya",
+    "A": "A şıkkı metni",
+    "B": "B şıkkı metni",
+    "C": "C şıkkı metni",
+    "D": "D şıkkı metni",
+    "dogru": "C"
+}}
 
-    # Ana konu tespiti
-    _STOP = {
-        "bir","bu","şu","o","ve","ile","de","da","ki","mi","mu","mü","mı",
-        "için","ama","fakat","ya","veya","gibi","kadar","daha","çok","az",
-        "en","ne","nasıl","neden","olan","olarak","ise","bile","var","yok",
-    }
-    words_raw = re.findall(r'[a-zçğışöüA-ZÇĞİŞÖÜ]{5,}', text.lower())
-    freq: dict[str, int] = {}
-    for w in words_raw:
-        if w not in _STOP:
-            freq[w] = freq.get(w, 0) + 1
-    top_word = sorted(freq.items(), key=lambda x: x[1], reverse=True)
-    main_topic = top_word[0][0].capitalize() if top_word else (record.category or "Genel")
+Metin: {text[:2500]}
+"""
 
-    # 1. Metindeki "X nedir?" soruları → direkt al, sonraki cümle cevap
-    nedir_re = re.compile(
-        r'[\w\s\-çğışöüÇĞİŞÖÜ]{3,40}\s+nedir\??',
-        re.IGNORECASE | re.UNICODE,
-    )
-    for i, sent in enumerate(sentences):
-        if len(cards) >= 5:
-            break
-        if nedir_re.search(sent):
-            question = sent.strip()
-            if not question.endswith('?'):
-                question += '?'
-            answer_text = sentences[i + 1].strip() if i + 1 < len(sentences) else "—"
-            cards.append({"q": question, "a": answer_text[:150]})
+    response_text = _ask_gemini(prompt)
+    if not response_text:
+        return {"answer": "Quiz hazırlanamadı, API yanıt vermedi.", "options": [f"CMD_SELECT_{record_id}"]}
 
-    # 2. "X, Y'dir" tanım cümleleri → "X nedir? → Y'dir" formatı
-    def_re = re.compile(
-        r'^([\w\s\-çğışöüÇĞİŞÖÜ]{3,35}?)\s*,\s*'
-        r'([\w\s\-çğışöüÇĞİŞÖÜ]{5,80}?)'
-        r'(?:dir|dır|dur|dür|tır|tir|tur|tür)[.,\s]*$',
-        re.IGNORECASE | re.UNICODE,
-    )
-    for sent in sentences:
-        if len(cards) >= 5:
-            break
-        m = def_re.match(sent.strip())
-        if m:
-            term = m.group(1).strip()
-            if len(term.split()) <= 4:
-                question = f"{term[0].upper() + term[1:]} nedir?"
-                if not any(c["q"].lower() == question.lower() for c in cards):
-                    cards.append({"q": question, "a": sent.strip()[:150]})
+    try:
+        clean_json = response_text.replace('```json', '').replace('```', '').strip()
+        data = json.loads(clean_json)
 
-    # 3. Büyük harf başlayan çok kelimeli terimler → soru üret
-    if len(cards) < 5:
-        term_re = re.compile(
-            r'\b[A-ZÇĞİŞÖÜ][a-zçğışöüA-ZÇĞİŞÖÜ]{2,}'
-            r'(?:\s+[A-ZÇĞİŞÖÜ][a-zçğışöüA-ZÇĞİŞÖÜ]{2,})+\b'
+        answer_text = (
+            f"🧠 **Quiz Zamanı!**\n\n"
+            f"**Soru:** {data['soru']}\n\n"
+            f"🅰 {data['A']}\n"
+            f"🅱 {data['B']}\n"
+            f"🅲 {data['C']}\n"
+            f"🅳 {data['D']}\n\n"
+            f"👇 Doğru şıkkı seç:"
         )
-        seen_terms: set[str] = set()
-        for sent in sentences:
-            for m in term_re.finditer(sent):
-                term = m.group(0).strip()
-                if term not in seen_terms and len(term.split()) <= 3:
-                    seen_terms.add(term)
-                    question = f"{term} kavramı nedir?"
-                    if not any(c["q"].lower() == question.lower() for c in cards):
-                        cards.append({"q": question, "a": sent.strip()[:150]})
-                if len(cards) >= 5:
-                    break
-            if len(cards) >= 5:
-                break
 
-    if not cards:
-        fn = record.filename.rsplit(".", 1)[0] if record.filename else f"Kayıt {record_id}"
-        return {
-            "answer": (
-                f"🎓 **Sınav Hazırlık Kartları**\n"
-                f"📚 Konu: {main_topic}\n\n"
-                "Bu kayıtta kart oluşturacak tanım/kavram bulunamadı. "
-                "Ders notu içerikli kayıtlarda daha iyi sonuç verir."
-            ),
-            "options": [o for o in _action_options(record_id) if "EXAM" not in o],
-        }
+        options = [
+            f"CMD_QANS_{record_id}_A_{data['dogru']}|A) {data['A'][:30]}",
+            f"CMD_QANS_{record_id}_B_{data['dogru']}|B) {data['B'][:30]}",
+            f"CMD_QANS_{record_id}_C_{data['dogru']}|C) {data['C'][:30]}",
+            f"CMD_QANS_{record_id}_D_{data['dogru']}|D) {data['D'][:30]}",
+        ]
 
-    lines = [
-        "🎓 **Sınav Hazırlık Kartları**",
-        f"📚 Konu: {main_topic}",
-        "",
-    ]
-    for i, card in enumerate(cards[:5], 1):
-        lines.append(f"❓ **Soru {i}:** {card['q']}")
-        lines.append(f"✅ **Cevap:** {card['a']}")
-        lines.append("")
+        return {"answer": answer_text, "options": options}
+
+    except Exception as e:
+        print(f"[Quiz] JSON parse hatası: {e}")
+        return {"answer": "Quiz oluşturulamadı.", "options": [f"CMD_SELECT_{record_id}"]}
+
+
+def _cmd_tech_extract(record_id: int, db, user) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
+    if not record:
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
+
+    text = (record.transcribed_text or "").strip()
+    print(f"[Tech] Transkript uzunluğu: {len(text.split())} kelime")
+
+    if not text or len(text.split()) < 10:
+        return {"answer": "Transkript analiz için çok kısa.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    prompt = f"Şu Türkçe ders transkriptindeki teknik terimleri, algoritmaları ve kavramları listele. Her birini 1 cümle ile açıkla. Türkçe yaz:\n\n{text[:1500]}"
+
+    print(f"[Tech] Gemini'ye gönderiliyor...")
+    result = _ask_gemini(prompt)
+    print(f"[Tech] Gemini sonucu: {result}")
+
+    if not result:
+        return {"answer": "Kod çıkarıcı şu an yanıt vermiyor, tekrar dene.", "options": [f"CMD_SELECT_{record_id}"]}
 
     return {
-        "answer": "\n".join(lines).rstrip(),
-        "options": [o for o in _action_options(record_id) if "EXAM" not in o],
+        "answer": f"💻 **Kod & Kavram Çıkarıcı**\n\n{result}",
+        "options": [
+            f"CMD_EXAM_{record_id}|☕ Quiz Molası",
+            f"CMD_SELECT_{record_id}|⬅ Geri",
+        ]
     }
 
 
-def _cmd_topics(record_id: int, db, user) -> dict:
-    """
-    Kullanıcının TÜM kayıtlarını tarar.
-    Aynı anahtar kelime 2+ kayıtta geçiyorsa 'tekrar eden konu' sayar.
-    """
-    records = db.query(models.Record).filter(
-        models.Record.user_id == user.id,
-        models.Record.transcribed_text.isnot(None)
-    ).all()
+def _cmd_code_extract(record_id: int, db, user) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
+    if not record:
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
 
-    if len(records) < 2:
-        return {
-            "answer": "📊 Konu analizi için en az 2 kayıt gerekli.",
-            "options": ["CMD_RECORDS", "CMD_MENU"],
-        }
+    text = (record.transcribed_text or "").strip()
+    if not text or len(text.split()) < 10:
+        return {"answer": "Transkript analiz için çok kısa.", "options": [f"CMD_SELECT_{record_id}"]}
 
-    _STOP = {
-        "bir","bu","şu","ve","ile","de","da","ki","için","ama","çünkü",
-        "olan","gibi","kadar","daha","çok","nasıl","neden","var","yok"
+    prompt = f"""Bu ders/toplantı kaydındaki yazılım terimlerini, mimari yapıları ve algoritmaları bul.
+Bunları kısa ve anlaşılır Pseudocode (Sözde Kod) blokları veya kod mantığı olarak özetle.
+ÖNEMLİ: Çıktıyı kesinlikle HTML etiketi kullanmadan, sadece düz metin ve temiz Markdown kullan.
+
+Transkript: {text[:2000]}"""
+
+    result = _ask_gemini(prompt)
+    if not result:
+        return {"answer": "Kod çıkarıcı şu an yanıt vermiyor.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    return {
+        "answer": f"💻 **Kod & Algoritma Çıkarıcı**\n\n{result}",
+        "options": [
+            f"CMD_CONCEPT_EXTRACT_{record_id}|📚 Ders Notu & Kavramlar",
+            f"CMD_EXAM_{record_id}|☕ Quiz Molası",
+            f"CMD_SELECT_{record_id}|⬅ Geri",
+        ]
     }
 
-    record_keywords: dict[int, set[str]] = {}
-    for r in records:
-        words = set(re.findall(r'[a-zçğışöüA-ZÇĞİŞÖÜ]{5,}', r.transcribed_text.lower()))
-        record_keywords[r.id] = words - _STOP
 
-    all_words: list[str] = []
-    for kws in record_keywords.values():
-        all_words.extend(kws)
-    word_record_count = Counter(all_words)
-    repeated = [(w, c) for w, c in word_record_count.items() if c >= 2]
-    repeated.sort(key=lambda x: x[1], reverse=True)
+def _cmd_concept_extract(record_id: int, db, user) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
+    if not record:
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
 
-    if not repeated:
-        return {
-            "answer": "🔍 Kayıtlarında henüz tekrar eden bir konu bulunamadı.",
-            "options": ["CMD_RECORDS", "CMD_MENU"],
-        }
+    text = (record.transcribed_text or "").strip()
+    if not text or len(text.split()) < 10:
+        return {"answer": "Transkript analiz için çok kısa.", "options": [f"CMD_SELECT_{record_id}"]}
 
-    top = repeated[:6]
-    lines = [f"🔄 **{w}** — {c} kayıtta geçiyor" for w, c in top]
+    prompt = f"""Bu kayıttaki tüm teorik tanımları, önemli kavramları ve ana fikirleri ders notu formatında, madde madde özetle.
+ÖNEMLİ: Çıktıyı kesinlikle HTML etiketi kullanmadan, sadece düz metin ve temiz Markdown kullan.
 
-    sinav_tekrar = [w for w, _ in top if w in {"sınav","vize","final","ödev","teslim"}]
-    uyari = ""
-    if sinav_tekrar:
-        uyari = f"\n\n⚠️ **'{sinav_tekrar[0]}'** birden fazla kayıtta geçiyor — yaklaşan bir deadline olabilir!"
+Transkript: {text[:2000]}"""
 
-    answer = (
-        f"📊 **Tekrar Eden Konular ({len(records)} kayıt tarandı):**\n\n"
-        + "\n".join(lines)
-        + uyari
-    )
+    result = _ask_gemini(prompt)
+    if not result:
+        return {"answer": "Kavram çıkarıcı şu an yanıt vermiyor.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    _last_concept_cache[f"{user.id}_{record_id}"] = result
+
     return {
-        "answer": answer,
-        "options": ["CMD_RECORDS", "CMD_MENU"],
+        "answer": f"📚 **Ders Notu & Kavramlar**\n\n{result}",
+        "options": [
+            f"CMD_SAVE_NOTE_{record_id}|💾 Notlara Kaydet",
+            f"CMD_CODE_EXTRACT_{record_id}|💻 Kod Çıkarıcı",
+            f"CMD_SELECT_{record_id}|⬅ Geri",
+        ],
+        "save_content": result,
+        "save_record_id": record_id,
+    }
+
+
+def _cmd_save_note(record_id: int, content: str, db, user) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
+    if not record:
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
+
+    try:
+        existing = record.notes or ""
+        separator = "\n\n---\n\n" if existing else ""
+        record.notes = existing + separator + content
+        db.commit()
+        return {
+            "answer": "✅ Kavramlar başarıyla bu kaydın notlarına eklendi!\nKayıtlar sekmesinden Notlar bölümünden okuyabilirsin.",
+            "options": [
+                f"CMD_SELECT_{record_id}|⬅ Kayda Dön",
+                "CMD_RECORDS|📁 Kayıtlar",
+            ]
+        }
+    except Exception as e:
+        print(f"[SaveNote] Hata: {e}")
+        db.rollback()
+        return {"answer": "Not kaydedilemedi, hata oluştu.", "options": [f"CMD_SELECT_{record_id}"]}
+
+
+def _cmd_simplify(record_id: int, db, user) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
+    if not record:
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
+
+    text = (record.transcribed_text or "").strip()
+    if not text or len(text.split()) < 10:
+        return {"answer": "Transkript çok kısa.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    prompt = f"""Bu ders/toplantı kaydındaki karmaşık terimleri bul. Bunları 5 yaşındaki bir çocuğa anlatır gibi, günlük hayattan basit benzetmeler yaparak, madde madde ve en basit Türkçe haliyle anlat.
+ÖNEMLİ: Çıktıyı kesinlikle HTML etiketi kullanmadan, sadece düz metin ve temiz Markdown kullan.
+
+Transkript: {text[:2000]}"""
+
+    result = _ask_gemini(prompt)
+    if not result:
+        return {"answer": "Basitleştirici şu an yanıt vermiyor.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    return {
+        "answer": f"🧠 **Mala Anlatır Gibi Anlat**\n\n{result}",
+        "options": [
+            f"CMD_MINDMAP_{record_id}",
+            f"CMD_CONCEPT_EXTRACT_{record_id}",
+            f"CMD_SELECT_{record_id}|⬅ Geri",
+        ]
+    }
+
+
+def _cmd_resources(record_id: int, db, user) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
+    if not record:
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
+
+    text = (record.transcribed_text or "").strip()
+    if not text or len(text.split()) < 10:
+        return {"answer": "Transkript çok kısa.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    prompt = f"""Bu ders/toplantı kaydının ana konusunu ve alt başlıklarını belirle. Kullanıcının bu konuyu daha derinlemesine öğrenmesi için öner:
+- 2 adet YouTube arama sorgusu
+- 2 adet temel kaynak kitap veya makale adı
+- 1 adet resmi dokümantasyon veya faydalı web sitesi
+
+Çıktıyı emojilerle süslenmiş şık Markdown listesi olarak ver.
+ÖNEMLİ: HTML etiketi kullanma, sadece düz Markdown.
+
+Transkript: {text[:2000]}"""
+
+    result = _ask_gemini(prompt)
+    if not result:
+        return {"answer": "Kaynak önerici şu an yanıt vermiyor.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    return {
+        "answer": f"🎬 **Kaynak Önerileri**\n\n{result}",
+        "options": [
+            f"CMD_CONCEPT_EXTRACT_{record_id}",
+            f"CMD_SELECT_{record_id}|⬅ Geri",
+        ]
+    }
+
+
+def _cmd_team_matrix(record_id: int, db, user) -> dict:
+    record = db.query(models.Record).filter(
+        models.Record.id == record_id,
+        models.Record.user_id == user.id
+    ).first()
+    if not record:
+        return {"answer": "Kayıt bulunamadı.", "options": ["CMD_RECORDS"]}
+
+    text = (record.transcribed_text or "").strip()
+    if not text or len(text.split()) < 15:
+        return {"answer": "Transkript ekip analizi için çok kısa.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    prompt = f"""
+Bu toplantı/ders transkriptinden kişi isimlerini ve görev atamalarını çıkar.
+Eğer isim geçmiyorsa genel görev dağılımını çıkar.
+
+Format:
+👤 [İsim veya Rol]: [Görev] (Varsa termin tarihi)
+
+Sadece açıkça belirtilen görev atamalarını yaz.
+Türkçe yanıtla.
+
+Transkript: {text[:2500]}
+"""
+    result = _ask_gemini(prompt)
+    if not result:
+        return {"answer": "Ekip matrisi oluşturulamadı.", "options": [f"CMD_SELECT_{record_id}"]}
+
+    return {
+        "answer": f"👥 **Ekip Görev Matrisi**\n\n{result}",
+        "options": [
+            f"CMD_SELECT_{record_id}|⬅ Geri",
+            "CMD_RECORDS|📁 Kayıtlar",
+        ]
     }
 
 
@@ -2201,18 +2575,13 @@ def _dispatch_cmd(cmd: str, db, user) -> dict:
         return _cmd_tasks(db, user)
     if cmd == "CMD_RECORDS":
         return _cmd_records(db, user)
-
     m = re.match(r"^CMD_SELECT_(\d+)$", cmd)
     if m:
-        return _cmd_select(int(m.group(1)), db, user)
+        return _cmd_select(int(m.group(1)), user.id, db)
 
     m = re.match(r"^CMD_SUMMARIZE_(\d+)$", cmd)
     if m:
         return _cmd_summarize(int(m.group(1)), db, user)
-
-    m = re.match(r"^CMD_ANALYZE_(\d+)$", cmd)
-    if m:
-        return _cmd_analyze(int(m.group(1)), db, user)
 
     m = re.match(r"^CMD_CALENDAR_(\d+)$", cmd)
     if m:
@@ -2222,13 +2591,82 @@ def _dispatch_cmd(cmd: str, db, user) -> dict:
     if m:
         return _cmd_meeting(int(m.group(1)), db, user)
 
-    m = re.match(r"^CMD_TOPICS_(\d+)$", cmd)
-    if m:
-        return _cmd_topics(int(m.group(1)), db, user)
-
     m = re.match(r"^CMD_EXAM_(\d+)$", cmd)
     if m:
         return _cmd_exam(int(m.group(1)), db, user)
+
+    m_quiz = re.match(r"^CMD_QANS_(\d+)_([A-D])_([A-D])$", cmd.split("|")[0].strip())
+    if m_quiz:
+        record_id = int(m_quiz.group(1))
+        user_choice = m_quiz.group(2)
+        correct_choice = m_quiz.group(3)
+
+        if user_choice == correct_choice:
+            answer = f"🎉 **Doğru!** {correct_choice} şıkkı doğruydu. Harika iş!"
+        else:
+            answer = f"❌ **Yanlış.** Sen {user_choice} seçtin, doğru cevap **{correct_choice}** idi."
+
+        return {
+            "answer": answer,
+            "options": [
+                f"CMD_EXAM_{record_id}|🔄 Yeni Soru",
+                f"CMD_SELECT_{record_id}|⬅ Kayda Dön",
+            ]
+        }
+
+    if cmd.startswith("CMD_TECH_EXTRACT_"):
+        record_id = int(cmd.split("_")[-1])
+        return _cmd_tech_extract(record_id, db, user)
+
+    if cmd.startswith("CMD_CODE_EXTRACT_"):
+        record_id = int(cmd.split("_")[-1])
+        return _cmd_code_extract(record_id, db, user)
+
+    if cmd.startswith("CMD_SIMPLIFY_"):
+        record_id = int(cmd.split("_")[-1])
+        return _cmd_simplify(record_id, db, user)
+
+    if cmd.startswith("CMD_CONCEPT_EXTRACT_"):
+        record_id = int(cmd.split("_")[-1])
+        return _cmd_concept_extract(record_id, db, user)
+
+    if cmd.startswith("CMD_SAVE_NOTE_"):
+        record_id = int(cmd.split("_")[-1])
+        content = _last_concept_cache.get(f"{user.id}_{record_id}", "")
+        print(f"[SaveNote] user={user.id} record={record_id}")
+        print(f"[SaveNote] cache keys: {list(_last_concept_cache.keys())}")
+        print(f"[SaveNote] content length: {len(content)}")
+        if not content:
+            return {"answer": "Kaydedilecek içerik bulunamadı. Önce kavram çıkarıcıyı kullan.", "options": [f"CMD_SELECT_{record_id}"]}
+        return _cmd_save_note(record_id, content, db, user)
+
+    if cmd.startswith("CMD_RESOURCES_"):
+        record_id = int(cmd.split("_")[-1])
+        return _cmd_resources(record_id, db, user)
+
+    if cmd.startswith("CMD_TEAM_MATRIX_"):
+        record_id = int(cmd.split("_")[-1])
+        return _cmd_team_matrix(record_id, db, user)
+
+    if cmd.startswith("GCAL_"):
+        parts = cmd.split("_", 3)
+        title = parts[2] if len(parts) > 2 else "Görev"
+        date_str = parts[3] if len(parts) > 3 else ""
+        gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={title}&dates={date_str.replace('-','')}/{date_str.replace('-','')}"
+        return {
+            "answer": f"📅 Google Calendar linki hazır!\n\nTarayıcında açmak için aşağıdaki butona bas:",
+            "options": [
+                f"URL_{gcal_url}|🗓 Google Calendar'da Aç",
+                f"CMD_SELECT_{parts[1]}|⬅ Geri",
+            ]
+        }
+
+    if cmd.startswith("URL_"):
+        url = cmd[4:]
+        return {
+            "answer": f"🔗 Link: {url}",
+            "options": ["CMD_MENU|🏠 Ana Menü"]
+        }
 
     print(f"[/api/chat] Bilinmeyen CMD: {cmd}")
     return {"answer": "Bilinmeyen komut.", "options": _MAIN_OPTIONS}

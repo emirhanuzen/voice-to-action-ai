@@ -170,6 +170,7 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   late DateTime _focusedDay;
   late DateTime _selectedDay;
+  late DateTime _focusedWeekStart;
 
   // Ay görünümü varsayılan — daha büyük ve okunaklı
   CalendarFormat _calendarFormat = CalendarFormat.month;
@@ -180,6 +181,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     final DateTime jump = widget.initialDate ?? DateTime.now();
     _focusedDay = jump;
     _selectedDay = jump;
+    _focusedWeekStart = jump.subtract(Duration(days: jump.weekday - 1));
     _fadeCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
@@ -404,65 +406,55 @@ class _CalendarScreenState extends State<CalendarScreen>
                   onPageChanged: (DateTime focused) =>
                       setState(() => _focusedDay = focused),
                   calendarBuilders: CalendarBuilders<TaskItem>(
-                    markerBuilder: (BuildContext ctx, DateTime day,
+                    markerBuilder: (BuildContext ctx, DateTime date,
                         List<TaskItem> events) {
-                      if (events.isEmpty) return const SizedBox.shrink();
-                      final DateTime today = DateTime(DateTime.now().year,
-                          DateTime.now().month, DateTime.now().day);
-                      final int diff =
-                          DateTime(day.year, day.month, day.day)
-                              .difference(today)
-                              .inDays;
-                      final int pending = events
-                          .where((TaskItem t) => t.status != 'done')
-                          .length;
+                      if (events.isEmpty) return null;
+                      final String dateStr =
+                          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                      final DateTime today = DateTime.now();
+                      final String todayStr =
+                          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
-                      String emoji;
-                      if (pending == 0) {
-                        emoji = '✅';
-                      } else if (diff < 0) {
-                        emoji = '⚠️';
-                      } else if (diff == 0) {
-                        emoji = '🔥';
-                      } else if (diff == 1) {
-                        emoji = '⏰';
-                      } else if (diff <= 6) {
-                        emoji = '📌';
+                      final bool allDone =
+                          events.every((TaskItem t) => t.status == 'done');
+                      final bool isPast = DateTime.parse(dateStr).isBefore(DateTime.parse(todayStr));
+                      final bool isToday = dateStr == todayStr;
+                      final bool hasPending =
+                          events.any((TaskItem t) => t.status != 'done');
+
+                      Color dotColor;
+                      bool pulse = false;
+
+                      if (allDone) {
+                        dotColor = const Color(0xFF22C55E); // yeşil - tamamlandı
+                      } else if (isPast && hasPending) {
+                        dotColor = const Color(0xFFEF4444); // kırmızı - geçti bekliyor
+                        pulse = true;
+                      } else if (isToday && hasPending) {
+                        dotColor = const Color(0xFFF97316); // turuncu - bugün
+                        pulse = true;
                       } else {
-                        emoji = '📅';
+                        dotColor = const Color(0xFF3B82F6); // mavi - bekliyor
                       }
 
                       return Positioned(
-                        bottom: 3,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Text(emoji,
-                                style: const TextStyle(
-                                    fontSize: 11, height: 1)),
-                            if (events.length > 1)
-                              Container(
-                                margin: const EdgeInsets.only(left: 2),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 4, vertical: 1),
+                        bottom: 4,
+                        child: pulse
+                            ? _PulsingDot(color: dotColor)
+                            : Container(
+                                width: 6,
+                                height: 6,
                                 decoration: BoxDecoration(
-                                  color: pending == 0
-                                      ? const Color(0xFF16A34A)
-                                      : _urgencyColor(day),
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                                child: Text(
-                                  '${events.length}',
-                                  style: const TextStyle(
-                                    fontSize: 8,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.3,
-                                  ),
+                                  color: dotColor,
+                                  shape: BoxShape.circle,
+                                  boxShadow: <BoxShadow>[
+                                    BoxShadow(
+                                      color: dotColor.withValues(alpha: 0.6),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
                                 ),
                               ),
-                          ],
-                        ),
                       );
                     },
                   ),
@@ -481,14 +473,18 @@ class _CalendarScreenState extends State<CalendarScreen>
                       shape: BoxShape.rectangle,
                     ),
                     todayDecoration: BoxDecoration(
-                      color: isDarkMode ? const Color(0xFF1E3A5F) : const Color(0xFFDBEAFE),
+                      color: isDarkMode
+                          ? const Color(0xFF1E3A5F)
+                          : const Color(0xFFDBEAFE),
                       borderRadius: BorderRadius.circular(10),
                       shape: BoxShape.rectangle,
                     ),
                     todayTextStyle: GoogleFonts.inter(
                       fontWeight: FontWeight.w800,
                       fontSize: 14,
-                      color: isDarkMode ? const Color(0xFF3B82F6) : const Color(0xFF2563EB),
+                      color: isDarkMode
+                          ? const Color(0xFF3B82F6)
+                          : const Color(0xFF2563EB),
                     ),
                     selectedDecoration: BoxDecoration(
                       color: const Color(0xFF2563EB),
@@ -509,7 +505,9 @@ class _CalendarScreenState extends State<CalendarScreen>
                     ),
                     defaultTextStyle: GoogleFonts.inter(
                       fontSize: 13,
-                      color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                      color: isDarkMode
+                          ? const Color(0xFFF1F5F9)
+                          : const Color(0xFF1E293B),
                     ),
                     weekendTextStyle: GoogleFonts.inter(
                       fontSize: 13,
@@ -522,7 +520,9 @@ class _CalendarScreenState extends State<CalendarScreen>
                     titleTextStyle: GoogleFonts.inter(
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
-                      color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                      color: isDarkMode
+                          ? const Color(0xFFF1F5F9)
+                          : const Color(0xFF1E293B),
                     ),
                     leftChevronIcon: Container(
                       padding: const EdgeInsets.all(6),
@@ -555,7 +555,9 @@ class _CalendarScreenState extends State<CalendarScreen>
                     weekdayStyle: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF1E293B),
+                      color: isDarkMode
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF1E293B),
                     ),
                     weekendStyle: GoogleFonts.inter(
                       fontSize: 12,
@@ -588,7 +590,9 @@ class _CalendarScreenState extends State<CalendarScreen>
                         style: GoogleFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                          color: isDarkMode
+                              ? const Color(0xFFF1F5F9)
+                              : const Color(0xFF1E293B),
                         ),
                       ),
                     ),
@@ -599,8 +603,8 @@ class _CalendarScreenState extends State<CalendarScreen>
                         decoration: BoxDecoration(
                           color: urgColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
-                          border:
-                              Border.all(color: urgColor.withValues(alpha: 0.3)),
+                          border: Border.all(
+                              color: urgColor.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -624,7 +628,8 @@ class _CalendarScreenState extends State<CalendarScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                          color:
+                              const Color(0xFF7C3AED).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                               color: const Color(0xFF7C3AED)
@@ -660,8 +665,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                         padding:
                             const EdgeInsets.fromLTRB(16, 0, 16, 100),
                         itemCount: dayTasks.length,
-                        separatorBuilder:
-                            (BuildContext context, int index) =>
+                        separatorBuilder: (BuildContext context, int index) =>
                             const SizedBox(height: 10),
                         itemBuilder: (BuildContext context, int i) =>
                             _CalendarTaskCard(
@@ -674,28 +678,28 @@ class _CalendarScreenState extends State<CalendarScreen>
                               await appState.toggleTask(idx);
                             }
                           },
-                          onNavigateToTask:
-                              widget.onNavigateToTask != null &&
-                                      dayTasks[i].id != null
-                                  ? () => widget
-                                      .onNavigateToTask!(dayTasks[i].id!)
-                                  : null,
-                          onOpenRecord:
-                              widget.onOpenRecord != null &&
-                                      dayTasks[i].recordId != null
-                                  ? () => widget
-                                      .onOpenRecord!(dayTasks[i].recordId!)
-                                  : null,
+                          onNavigateToTask: widget.onNavigateToTask != null &&
+                                  dayTasks[i].id != null
+                              ? () => widget
+                                  .onNavigateToTask!(dayTasks[i].id!)
+                              : null,
+                          onOpenRecord: widget.onOpenRecord != null &&
+                                  dayTasks[i].recordId != null
+                              ? () => widget
+                                  .onOpenRecord!(dayTasks[i].recordId!)
+                              : null,
                         ),
                       )
                     : transcriptHits.isNotEmpty
                         ? ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 0, 16, 100),
                             itemCount: transcriptHits.length + 1,
                             itemBuilder: (BuildContext context, int index) {
                               if (index == 0) {
                                 return Padding(
-                                  padding: const EdgeInsets.only(bottom: 14),
+                                  padding:
+                                      const EdgeInsets.only(bottom: 14),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -730,7 +734,8 @@ class _CalendarScreenState extends State<CalendarScreen>
                                 child: _TranscriptHitCard(
                                   hit: h,
                                   onOpenRecord: widget.onOpenRecord != null
-                                      ? () => widget.onOpenRecord!(h.recordId)
+                                      ? () =>
+                                          widget.onOpenRecord!(h.recordId)
                                       : null,
                                 ),
                               );
@@ -996,23 +1001,91 @@ class _CalendarTaskCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 200),
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: isDone
-                            ? const Color(0xFFCBD5E1)
-                            : (isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B)),
-                        height: 1.4,
-                        decoration: isDone
-                            ? TextDecoration.lineThrough
-                            : TextDecoration.none,
-                        decorationColor: const Color(0xFFCBD5E1),
-                        decorationThickness: 1.5,
-                      ),
-                      child: Text(task.title,
-                          maxLines: 3, overflow: TextOverflow.ellipsis),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isDone
+                                  ? const Color(0xFFCBD5E1)
+                                  : (isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B)),
+                              height: 1.4,
+                              decoration: isDone
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                              decorationColor: const Color(0xFFCBD5E1),
+                              decorationThickness: 1.5,
+                            ),
+                            child: Text(task.title,
+                                maxLines: 3, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // ── Durum badge ────────────────────────────────────
+                        Builder(builder: (BuildContext context) {
+                          final DateTime now = DateTime.now();
+                          final String today =
+                              '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                          final String taskDate =
+                              task.dueDate?.toString().substring(0, 10) ?? '';
+                          final bool isPast = taskDate.isNotEmpty &&
+                              DateTime.parse(taskDate)
+                                  .isBefore(DateTime.parse(today));
+                          final bool isToday = taskDate == today;
+
+                          Color badgeColor;
+                          String badgeText;
+                          IconData badgeIcon;
+
+                          if (isDone) {
+                            badgeColor = const Color(0xFF22C55E);
+                            badgeText = 'Tamamlandı';
+                            badgeIcon = Icons.check_circle_rounded;
+                          } else if (isPast) {
+                            badgeColor = const Color(0xFFEF4444);
+                            badgeText = 'Geçti';
+                            badgeIcon = Icons.warning_rounded;
+                          } else if (isToday) {
+                            badgeColor = const Color(0xFFF97316);
+                            badgeText = 'Bugün';
+                            badgeIcon = Icons.local_fire_department_rounded;
+                          } else {
+                            badgeColor = const Color(0xFF3B82F6);
+                            badgeText = 'Bekliyor';
+                            badgeIcon = Icons.access_time_rounded;
+                          }
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: badgeColor.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(badgeIcon, size: 11, color: badgeColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  badgeText,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: badgeColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     // ── Rozetler satırı ─────────────────────────────────────
@@ -1193,6 +1266,61 @@ class _CalendarTaskCard extends StatelessWidget {
             child: Text('🔥', style: TextStyle(fontSize: 18)),
           ),
       ],
+    );
+  }
+}
+
+// ─── Yanıp sönen nokta (geçmiş + bekleyen görevler için) ─────────────────────
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot({required this.color});
+
+  final Color color;
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _animation =
+        Tween<double>(begin: 0.4, end: 1.0).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (BuildContext context, Widget? child) => Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: widget.color.withValues(alpha: _animation.value),
+          shape: BoxShape.circle,
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: widget.color
+                  .withValues(alpha: _animation.value * 0.8),
+              blurRadius: 6,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

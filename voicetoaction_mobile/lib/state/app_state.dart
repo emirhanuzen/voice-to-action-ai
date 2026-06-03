@@ -55,6 +55,9 @@ class TaskItem {
     this.dueDate,
     this.status = 'pending',
     this.recordId,
+    this.fileName,
+    this.recordName,
+    this.category,
   });
 
   factory TaskItem.fromJson(Map<String, dynamic> json) => TaskItem(
@@ -65,6 +68,9 @@ class TaskItem {
         dueDate: json['due_date'] as String?,
         status: (json['status'] as String?) ?? 'pending',
         recordId: json['record_id'] as int?,
+        fileName: json['file_name'] as String?,
+        recordName: json['record_name'] as String?,
+        category: json['category'] as String?,
       );
 
   final int? id;
@@ -72,6 +78,9 @@ class TaskItem {
   final String? dueDate;
   final String status;
   final int? recordId;
+  String? fileName;
+  final String? recordName;
+  final String? category;
 
   TaskItem copyWith({String? status}) => TaskItem(
         id: id,
@@ -179,9 +188,18 @@ class AppState extends ChangeNotifier {
       ..clear()
       ..addAll(rawRecords.map(_parseRecord));
 
+    final List<TaskItem> parsedTasks = rawTasks.map(TaskItem.fromJson).toList();
+    for (final TaskItem task in parsedTasks) {
+      if (task.recordId == null) continue;
+      final int idx = records.indexWhere((RecordItem r) => r.id == task.recordId);
+      if (idx != -1) {
+        task.fileName ??= records[idx].fileName ?? records[idx].autoTitle;
+      }
+    }
+
     tasks
       ..clear()
-      ..addAll(rawTasks.map(TaskItem.fromJson));
+      ..addAll(parsedTasks);
 
     isInitialLoading = false;
     notifyListeners();

@@ -9,7 +9,7 @@ import '../app_navigator.dart';
 import '../screens/login_screen.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://10.192.31.140:8000/api';
+  static const String baseUrl = 'http://10.196.143.100:8000/api';
 
   String audioUrl(int recordId) => '$baseUrl/records/$recordId/audio';
 

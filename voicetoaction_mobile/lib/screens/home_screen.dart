@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:io';
+
+import 'package:collection/collection.dart';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
@@ -92,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime? _calendarJumpDate;      // takvim sekmesinde açılacak gün
 
   bool _initialized = false;
+  String _selectedUploadCategory = 'Eğitim';
 
   @override
   void didChangeDependencies() {
@@ -129,50 +133,87 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (BuildContext ctx) {
         final bool isDarkMode = ctx.watch<AppState>().isDarkMode;
-        return _SheetContainer(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _sheetHandle(),
-              const SizedBox(height: 16),
-              Text(
-                'Ne yapmak istersin?',
-                style: GoogleFonts.inter(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
-                ),
+        return StatefulBuilder(
+          builder: (BuildContext _, StateSetter setModalState) {
+            return _SheetContainer(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _sheetHandle(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Ne yapmak istersin?',
+                    style: GoogleFonts.inter(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    children: <String>['Eğitim', 'Toplantı', 'Röportaj', 'Diğer'].map((String cat) =>
+                      GestureDetector(
+                        onTap: () => setModalState(() => _selectedUploadCategory = cat),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedUploadCategory == cat
+                              ? const Color(0xFF3B82F6)
+                              : isDarkMode ? const Color(0xFF141B2D) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: _selectedUploadCategory == cat
+                                ? const Color(0xFF3B82F6)
+                                : isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          child: Text(
+                            cat,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _selectedUploadCategory == cat
+                                ? Colors.white
+                                : isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  _FabOptionTile(
+                    icon: Icons.mic_rounded,
+                    iconBg: const Color(0xFFDBEAFE),
+                    iconColor: const Color(0xFF2563EB),
+                    title: '🎤  Ses Kaydet',
+                    subtitle: 'Mikrofon ile yeni kayıt başlat',
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      final Object? result = await Navigator.pushNamed(
+                          context, RecordScreen.routeName);
+                      if (result == true) _loadInitialData();
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _FabOptionTile(
+                    icon: Icons.audio_file_rounded,
+                    iconBg: const Color(0xFFF3E8FF),
+                    iconColor: const Color(0xFFA855F7),
+                    title: '📁  Ses Dosyası Seç',
+                    subtitle: 'Cihazdan ses/video dosyası yükle',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickAndTranscribe();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
-              const SizedBox(height: 16),
-              _FabOptionTile(
-                icon: Icons.mic_rounded,
-                iconBg: const Color(0xFFDBEAFE),
-                iconColor: const Color(0xFF2563EB),
-                title: '🎤  Ses Kaydet',
-                subtitle: 'Mikrofon ile yeni kayıt başlat',
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final Object? result = await Navigator.pushNamed(
-                      context, RecordScreen.routeName);
-                  if (result == true) _loadInitialData();
-                },
-              ),
-              const SizedBox(height: 10),
-              _FabOptionTile(
-                icon: Icons.audio_file_rounded,
-                iconBg: const Color(0xFFF3E8FF),
-                iconColor: const Color(0xFFA855F7),
-                title: '📁  Ses Dosyası Seç',
-                subtitle: 'Cihazdan ses/video dosyası yükle',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickAndTranscribe();
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -203,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 'Bu kaydı hangi kategoriye eklemek istersin?',
                 style: GoogleFonts.inter(
-                    fontSize: 13, color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    fontSize: 13, color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B)),
               ),
               const SizedBox(height: 16),
               ..._Cat.all.map((Map<String, dynamic> cat) {
@@ -216,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 13),
                       decoration: BoxDecoration(
-                        color: isDarkMode ? const Color(0xFF334155) : (cat['bg'] as Color),
+                        color: isDarkMode ? const Color(0xFF1E2A3E) : (cat['bg'] as Color),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
@@ -259,24 +300,21 @@ class _HomeScreenState extends State<HomeScreen> {
         ? result.files.single.name
         : 'Medya Dosyası';
 
-    final String? chosenCategory = await _showCategorySheet();
-    if (chosenCategory == null) return;
-
     appState.setUploadState(
       loading: true,
       fileName: pickedFileName,
-      category: chosenCategory,
+      category: _selectedUploadCategory,
     );
 
     print('[HomeScreen] Transkripsiyon başlatıldı: '
-        'dosya=$pickedFileName kategori=$chosenCategory');
+        'dosya=$pickedFileName kategori=$_selectedUploadCategory');
 
     Map<String, dynamic>? transcribeResult;
     String? uploadError;
     try {
       transcribeResult = await _apiService.uploadMediaAndTranscribe(
         File(result.files.single.path!),
-        category: chosenCategory,
+        category: _selectedUploadCategory,
       );
       print('[HomeScreen] Transkripsiyon yanıtı: $transcribeResult');
     } catch (e) {
@@ -315,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appState.insertRecord(
         _RecordItem(
           fileName: pickedFileName,
-          category: chosenCategory,
+          category: _selectedUploadCategory,
           transcript: text.trim().isEmpty ? '' : text,
           autoTitle: transcribeResult?['auto_title'] as String?,
           originalFilename: transcribeResult?['original_filename'] as String?,
@@ -758,7 +796,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── Nav ───────────────────────────────────────────────────────────────────
   void _onBottomNavTap(int index) {
-    if (index == 4) {
+    if (index == 5) {
       Navigator.pushNamed(context, ProfileScreen.routeName);
       return;
     }
@@ -838,6 +876,12 @@ class _HomeScreenState extends State<HomeScreen> {
               _showRecordDetailSheet(item, idx),
           onRefresh: _loadInitialData,
         );
+      case 4:
+        body = _StatsPage(
+          isDarkMode: appState.isDarkMode,
+          records: appState.records,
+          tasks: appState.tasks,
+        );
       default:
         body = _HomePage(
           displayName: displayName,
@@ -863,7 +907,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isDarkMode = appState.isDarkMode;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      backgroundColor: isDarkMode ? const Color(0xFF0A0F1E) : const Color(0xFFF8FAFC),
       bottomNavigationBar: _BottomNavBar(
         selectedIndex: _selectedBottomIndex,
         onTap: _onBottomNavTap,
@@ -1055,6 +1099,107 @@ class _HomePage extends StatelessWidget {
             child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
             children: <Widget>[
+              Builder(builder: (BuildContext context) {
+                final bool isDarkMode = context.watch<AppState>().isDarkMode;
+                final String today =
+                    DateTime.now().toIso8601String().substring(0, 10);
+                final List<_TaskItem> todayTasks = tasks
+                    .where((_TaskItem t) =>
+                        t.dueDate != null &&
+                        t.dueDate.toString().substring(0, 10) == today)
+                    .toList();
+                final int doneTasks = todayTasks
+                    .where((_TaskItem t) => t.status == 'done')
+                    .length;
+                final int total = todayTasks.length;
+                final double progress =
+                    total > 0 ? doneTasks / total : 0.0;
+
+                if (total == 0) return const SizedBox.shrink();
+
+                return Column(
+                  children: <Widget>[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDarkMode
+                            ? const Color(0xFF141B2D)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDarkMode
+                              ? const Color(0xFF1E2A3E)
+                              : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: Stack(
+                              children: <Widget>[
+                                CircularProgressIndicator(
+                                  value: progress,
+                                  backgroundColor: isDarkMode
+                                      ? const Color(0xFF1E2A3E)
+                                      : const Color(0xFFE2E8F0),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    progress == 1.0
+                                        ? const Color(0xFF22C55E)
+                                        : const Color(0xFF3B82F6),
+                                  ),
+                                  strokeWidth: 3,
+                                ),
+                                Center(
+                                  child: Text(
+                                    '$doneTasks',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: isDarkMode
+                                          ? const Color(0xFFF1F5F9)
+                                          : const Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                '$doneTasks/$total',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDarkMode
+                                      ? const Color(0xFFF1F5F9)
+                                      : const Color(0xFF1E293B),
+                                ),
+                              ),
+                              Text(
+                                'Bugün',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDarkMode
+                                      ? const Color(0xFF64748B)
+                                      : const Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+                );
+              }),
               // ── Özet istatistik satırı ───────────────────────────────────
               _StatsRow(
                 totalRecords: recentItems.length,
@@ -1098,7 +1243,7 @@ class _HomePage extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SAYFA: Görevler
 // ═══════════════════════════════════════════════════════════════════════════════
-class _TasksPage extends StatelessWidget {
+class _TasksPage extends StatefulWidget {
   const _TasksPage({
     required this.tasks,
     this.isLoading = false,
@@ -1118,18 +1263,70 @@ class _TasksPage extends StatelessWidget {
   final void Function(DateTime date)? onDateTap;
 
   @override
+  State<_TasksPage> createState() => _TasksPageState();
+}
+
+class _TasksPageState extends State<_TasksPage> {
+  int? _activeTimerId;
+  int _timeLeft = 1500;
+  bool _isRunning = false;
+  int _originalTime = 1500;
+  Timer? _timer;
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      setState(() {
+        if (_timeLeft <= 0) {
+          _isRunning = false;
+          _timer?.cancel();
+        } else {
+          _timeLeft--;
+        }
+      });
+    });
+    setState(() => _isRunning = true);
+  }
+
+  void _pauseTimer() {
+    _timer?.cancel();
+    setState(() => _isRunning = false);
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    setState(() {
+      _activeTimerId = null;
+      _timeLeft = 1500;
+      _isRunning = false;
+      _originalTime = 1500;
+    });
+  }
+
+  String _formatTime(int secs) {
+    final String m = (secs ~/ 60).toString().padLeft(2, '0');
+    final String s = (secs % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool isDarkMode = context.watch<AppState>().isDarkMode;
 
-    if (isLoading) {
+    if (widget.isLoading) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
       );
     }
 
-    if (tasks.isEmpty) {
+    if (widget.tasks.isEmpty) {
       return Container(
-        color: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        color: isDarkMode ? const Color(0xFF0A0F1E) : const Color(0xFFF8FAFC),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1138,7 +1335,7 @@ class _TasksPage extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFEEF2FF),
+                color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFEEF2FF),
                 borderRadius: BorderRadius.circular(36),
               ),
               child: const Icon(Icons.checklist_rounded,
@@ -1159,7 +1356,7 @@ class _TasksPage extends StatelessWidget {
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
                 height: 1.5,
               ),
             ),
@@ -1169,113 +1366,192 @@ class _TasksPage extends StatelessWidget {
       );          // Container
     }
 
+    // Kayıt bazlı gruplama
+    final Map<String, List<_TaskItem>> groupedTasks =
+        <String, List<_TaskItem>>{};
+    for (final _TaskItem t in widget.tasks) {
+      final String key = t.recordId?.toString() ?? 'other';
+      if (!groupedTasks.containsKey(key)) {
+        groupedTasks[key] = <_TaskItem>[];
+      }
+      groupedTasks[key]!.add(t);
+    }
+
     return Container(
-      color: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      color: isDarkMode ? const Color(0xFF0A0F1E) : const Color(0xFFF8FAFC),
       child: RefreshIndicator(
-        onRefresh: onRefresh ?? () async {},
+        onRefresh: widget.onRefresh ?? () async {},
         color: const Color(0xFF2563EB),
-        child: ListView.separated(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
-      itemCount: tasks.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (BuildContext context, int i) {
-        final _TaskItem task = tasks[i];
-        return Dismissible(
-          key: ValueKey<Object>(task.id ?? 'task_$i'),
-          direction: DismissDirection.endToStart,
-          behavior: HitTestBehavior.opaque,
-          // Kaydırma sırasında arkada görünen kırmızı arka plan
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 24),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEF4444),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+          itemCount: groupedTasks.length,
+          itemBuilder: (BuildContext context, int groupIndex) {
+            final String groupKey =
+                groupedTasks.keys.elementAt(groupIndex);
+            final List<_TaskItem> groupTasks = groupedTasks[groupKey]!;
+            final _TaskItem firstTask = groupTasks.first;
+            final String groupLabel = firstTask.fileName ??
+                firstTask.recordName ??
+                (firstTask.recordId != null
+                    ? 'Kayıt #${firstTask.recordId}'
+                    : 'Diğer');
+            final String groupCategory = firstTask.category ?? 'Diğer';
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Icon(
-                  Icons.delete_sweep_rounded,
-                  color: Colors.white,
-                  size: 26,
+                // Grup başlığı
+                Container(
+                  margin: EdgeInsets.only(
+                    bottom: 8,
+                    top: groupIndex == 0 ? 0 : 16,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? const Color(0xFF141B2D)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDarkMode
+                          ? const Color(0xFF1E2A3E)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.folder_rounded,
+                        size: 14,
+                        color: isDarkMode
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF2563EB),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          groupLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDarkMode
+                                ? const Color(0xFFF1F5F9)
+                                : const Color(0xFF1E293B),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDarkMode
+                              ? const Color(0xFF1E2A3E)
+                              : const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          groupCategory,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode
+                                ? const Color(0xFF64748B)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${groupTasks.length} aksiyon',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF3B82F6),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Sil',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                // Grup task'ları
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        color: isDarkMode
+                            ? const Color(0xFF1E2A3E)
+                            : const Color(0xFFE2E8F0),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  margin: const EdgeInsets.only(left: 8),
+                  child: Column(
+                    children: groupTasks.map((_TaskItem task) {
+                      final int taskIndex = widget.tasks.indexOf(task);
+                      return _TaskCard(
+                        task: task,
+                        isDarkMode: isDarkMode,
+                        onToggle: widget.onToggle != null
+                            ? () => widget.onToggle!(taskIndex)
+                            : null,
+                        onDelete: widget.onDelete != null
+                            ? () => widget.onDelete!(taskIndex)
+                            : null,
+                        isHighlighted: task.id != null &&
+                            task.id == widget.highlightedTaskId,
+                        onDateTap: widget.onDateTap,
+                        onTimerTap: () {
+                          setState(() {
+                            if (_activeTimerId == task.id) {
+                              _stopTimer();
+                            } else {
+                              _timer?.cancel();
+                              _activeTimerId = task.id;
+                              _timeLeft = 1500;
+                              _originalTime = 1500;
+                              _isRunning = false;
+                            }
+                          });
+                        },
+                        activeTimerId: _activeTimerId,
+                        timeLeft: _activeTimerId == task.id
+                            ? _timeLeft
+                            : 1500,
+                        originalTime: _activeTimerId == task.id
+                            ? _originalTime
+                            : 1500,
+                        isRunning:
+                            _activeTimerId == task.id && _isRunning,
+                        onStartTimer: _startTimer,
+                        onPauseTimer: _pauseTimer,
+                        onStopTimer: _stopTimer,
+                        onSetTime: (int min) => setState(() {
+                          _timer?.cancel();
+                          _isRunning = false;
+                          _timeLeft = min * 60;
+                          _originalTime = min * 60;
+                        }),
+                      );
+                    }).toList(),
                   ),
                 ),
               ],
-            ),
-          ),
-          confirmDismiss: (_) async {
-            // Tamamlanmış görevler için hızlı onay iste
-            if (task.status == 'done') {
-              return await showDialog<bool>(
-                    context: context,
-                    builder: (BuildContext ctx) => AlertDialog(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                      title: Text(
-                        'Görevi Sil',
-                        style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF1E293B)),
-                      ),
-                      content: Text(
-                        'Bu görev zaten tamamlandı. Yine de silmek istiyor musun?',
-                        style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B), height: 1.5),
-                      ),
-                      actions: <Widget>[
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: Text('İptal',
-                              style: GoogleFonts.inter(
-                                  color: const Color(0xFF64748B))),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: Text(
-                            'Sil',
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFFEF4444),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ) ??
-                  false;
-            }
-            return true;
+            );
           },
-          onDismissed: (_) {
-            if (onDelete != null) onDelete!(i);
-          },
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              splashFactory: NoSplash.splashFactory,
-            ),
-            child: _TaskCard(
-              task: task,
-              isDarkMode: isDarkMode,
-              onToggle: onToggle != null ? () => onToggle!(i) : null,
-              onDelete: onDelete != null ? () => onDelete!(i) : null,
-              isHighlighted: task.id != null && task.id == highlightedTaskId,
-              onDateTap: onDateTap,
-            ),
-          ),
-        );
-      },
-      ),   // ListView.separated
+        ),   // ListView.builder
       ),   // RefreshIndicator
     );     // Container
   }
@@ -1290,6 +1566,15 @@ class _TaskCard extends StatelessWidget {
     this.onDelete,
     this.isHighlighted = false,
     this.onDateTap,
+    this.onTimerTap,
+    this.activeTimerId,
+    this.timeLeft = 1500,
+    this.originalTime = 1500,
+    this.isRunning = false,
+    required this.onStartTimer,
+    required this.onPauseTimer,
+    required this.onStopTimer,
+    required this.onSetTime,
   });
 
   final _TaskItem task;
@@ -1300,11 +1585,26 @@ class _TaskCard extends StatelessWidget {
   final bool isHighlighted;
   /// Tarih rozetine tıklanınca — takvim sekmesine git.
   final void Function(DateTime date)? onDateTap;
+  final VoidCallback? onTimerTap;
+  final int? activeTimerId;
+  final int timeLeft;
+  final int originalTime;
+  final bool isRunning;
+  final VoidCallback onStartTimer;
+  final VoidCallback onPauseTimer;
+  final VoidCallback onStopTimer;
+  final void Function(int) onSetTime;
 
   @override
   Widget build(BuildContext context) {
     final DateTime? dt = _parseDate(task.dueDate);
     final bool isDone = task.status == 'done';
+    final bool isTimerActive = activeTimerId == task.id;
+    String fmtTimer(int s) {
+      final String m = (s ~/ 60).toString().padLeft(2, '0');
+      final String sec = (s % 60).toString().padLeft(2, '0');
+      return '$m:$sec';
+    }
 
     // Tarih rozet bilgisi
     String? dateLabel;
@@ -1321,13 +1621,69 @@ class _TaskCard extends StatelessWidget {
 
     final Color cardBg = isDone
         ? (isDarkMode ? const Color(0xFF1A2535) : const Color(0xFFF8FAFC))
-        : (isDarkMode ? const Color(0xFF1E293B) : Colors.white);
+        : (isDarkMode ? const Color(0xFF141B2D) : Colors.white);
     final Color cardBorder = isDarkMode
-        ? const Color(0xFF334155)
+        ? const Color(0xFF1E2A3E)
         : (isDone ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9));
+    final Color leftBorderColor = isDone
+        ? const Color(0xFF22C55E)
+        : task.category == 'Toplantı'
+            ? const Color(0xFF8B5CF6)
+            : task.category == 'Eğitim'
+                ? const Color(0xFF3B82F6)
+                : task.category == 'Röportaj'
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFF6366F1);
 
-    return Theme(
-      data: Theme.of(context).copyWith(
+    return Dismissible(
+      key: Key('task_${task.id}'),
+      confirmDismiss: (DismissDirection direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          onToggle?.call();
+          return false;
+        }
+        return true;
+      },
+      onDismissed: (DismissDirection direction) {
+        if (direction == DismissDirection.endToStart) {
+          onDelete?.call();
+        }
+      },
+      background: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF22C55E),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: const Row(
+          children: <Widget>[
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+            SizedBox(width: 8),
+            Text('Tamamla', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+      secondaryBackground: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            Text('Sil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            SizedBox(width: 8),
+            Icon(Icons.delete_rounded, color: Colors.white, size: 24),
+          ],
+        ),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
         splashFactory: NoSplash.splashFactory,
@@ -1347,12 +1703,9 @@ class _TaskCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isHighlighted
-              ? const Color(0xFFF59E0B)
-              : cardBorder,
-          width: isHighlighted ? 2 : 1,
-        ),
+        border: isHighlighted
+            ? Border.all(color: const Color(0xFFF59E0B), width: 2)
+            : Border(left: BorderSide(color: leftBorderColor, width: 4)),
         boxShadow: isHighlighted
             ? const <BoxShadow>[
                 BoxShadow(
@@ -1373,7 +1726,10 @@ class _TaskCard extends StatelessWidget {
                     ),
                   ]),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           // ── Tıklanabilir checkbox ────────────────────────────────────────
@@ -1426,85 +1782,116 @@ class _TaskCard extends StatelessWidget {
                   ),
                   child: Text(task.title),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: <Widget>[
-                    // ── Tarih rozeti (tıklanabilir → takvim) ──────────────
-                    if (dateLabel != null)
-                      GestureDetector(
-                        onTap: (dt != null && onDateTap != null && !isDone)
-                            ? () => onDateTap!(dt)
-                            : null,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isDone
-                                ? const Color(0xFFF1F5F9)
-                                : (isDarkMode
-                                    ? dateText.withValues(alpha: 0.25)
-                                    : dateBg),
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              Icon(
-                                Icons.calendar_today_rounded,
-                                size: 9,
-                                color: isDone
-                                    ? const Color(0xFFCBD5E1)
-                                    : dateText,
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                dateLabel,
-                                style: GoogleFonts.inter(
-                                  color: isDone
-                                      ? const Color(0xFFCBD5E1)
-                                      : dateText,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 10,
-                                ),
-                              ),
-                              if (onDateTap != null && !isDone) ...<Widget>[
-                                const SizedBox(width: 3),
-                                Icon(
-                                  Icons.open_in_new_rounded,
-                                  size: 8,
-                                  color: isDone
-                                      ? const Color(0xFFCBD5E1)
-                                      : dateText,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
+                if (task.dueDate != null) ...[
+                  const SizedBox(height: 4),
+                  Builder(builder: (context) {
+                    final DateTime now = DateTime.now();
+                    final DateTime? due = DateTime.tryParse(task.dueDate.toString());
+                    if (due == null) return const SizedBox.shrink();
+
+                    final int diff = due.difference(DateTime(now.year, now.month, now.day)).inDays;
+                    final bool isPast = diff < 0;
+                    final bool isToday = diff == 0;
+                    final bool isTomorrow = diff == 1;
+
+                    Color statusColor;
+                    IconData statusIcon;
+                    String statusText;
+
+                    if (isPast) {
+                      statusColor = const Color(0xFFEF4444);
+                      statusIcon = Icons.warning_rounded;
+                      statusText = 'Geçti';
+                    } else if (isToday) {
+                      statusColor = const Color(0xFFF97316);
+                      statusIcon = Icons.local_fire_department_rounded;
+                      statusText = 'Bugün';
+                    } else if (isTomorrow) {
+                      statusColor = const Color(0xFFFBBF24);
+                      statusIcon = Icons.access_time_rounded;
+                      statusText = 'Yarın';
+                    } else {
+                      statusColor = const Color(0xFF3B82F6);
+                      statusIcon = Icons.calendar_today_rounded;
+                      statusText = '$diff gün';
+                    }
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: statusColor.withOpacity(0.25)),
                       ),
-                    if (dateLabel != null) const SizedBox(width: 6),
-                    Icon(
-                      Icons.support_agent_rounded,
-                      size: 11,
-                      color: isDone
-                          ? const Color(0xFFCBD5E1)
-                          : const Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      'AI tespit etti',
-                      style: GoogleFonts.inter(
-                        color: isDone
-                            ? const Color(0xFFCBD5E1)
-                            : const Color(0xFF64748B),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(statusIcon, size: 11, color: statusColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            statusText,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: statusColor,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 6),
+                            width: 3,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Text(
+                            due.toLocal().toString().substring(0, 10),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: statusColor.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
+                    );
+                  }),
+                ],
               ],
             ),
           ),
+          // ── Pomodoro ────────────────────────────────────────────────
+          if (onTimerTap != null) ...<Widget>[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: onTimerTap,
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isTimerActive
+                      ? const Color(0xFF7C3AED).withValues(alpha: 0.2)
+                      : (isDarkMode
+                          ? const Color(0xFF1E2A3E)
+                          : const Color(0xFFF1F5F9)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.timer_rounded,
+                  size: 16,
+                  color: isTimerActive
+                      ? const Color(0xFF7C3AED)
+                      : (isDarkMode
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF64748B)),
+                ),
+              ),
+            ),
+          ],
           // ── Çöp kutusu ──────────────────────────────────────────────────
           if (onDelete != null) ...<Widget>[
             const SizedBox(width: 8),
@@ -1517,7 +1904,7 @@ class _TaskCard extends StatelessWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   color: isDone
-                      ? (isDarkMode ? const Color(0xFF334155) : const Color(0xFFF1F5F9))
+                      ? (isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFF1F5F9))
                       : (isDarkMode ? const Color(0xFF2D1B1B) : const Color(0xFFFFF1F2)),
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -1531,12 +1918,236 @@ class _TaskCard extends StatelessWidget {
               ),
             ),
           ],
+            ],
+          ),  // Row
+          // ── Pomodoro paneli ─────────────────────────────────────────
+          if (isTimerActive) ...<Widget>[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDarkMode
+                    ? const Color(0xFF141B2D)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: <Widget>[
+                  // Hızlı süre butonları
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      ...[15, 25, 50].map((int min) => GestureDetector(
+                        onTap: () => onSetTime(min),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: originalTime == min * 60
+                                ? const Color(0xFF7C3AED)
+                                : isDarkMode
+                                    ? const Color(0xFF1E2A3E)
+                                    : const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$min dk',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: originalTime == min * 60
+                                  ? Colors.white
+                                  : isDarkMode
+                                      ? const Color(0xFF64748B)
+                                      : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      )),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => onSetTime(
+                          ((originalTime ~/ 60) - 5).clamp(1, 120),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? const Color(0xFF1E2A3E)
+                                : const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '-5',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isDarkMode
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => onSetTime(
+                          ((originalTime ~/ 60) + 5).clamp(1, 120),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? const Color(0xFF1E2A3E)
+                                : const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '+5',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isDarkMode
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (timeLeft == 0)
+                    Column(
+                      children: <Widget>[
+                        const Text(
+                          '🎉 Süre Bitti! Harika odaklandın.',
+                          style: TextStyle(
+                            color: Color(0xFF22C55E),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: onStopTimer,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF22C55E)
+                                  .withValues(alpha: 0.2),
+                              foregroundColor: const Color(0xFF22C55E),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon:
+                                const Icon(Icons.check_circle_rounded, size: 16),
+                            label: const Text(
+                              'Görevi Tamamlandı İşaretle',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: <Widget>[
+                        Text(
+                          fmtTimer(timeLeft),
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 40,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 4,
+                            color: Color(0xFF7C3AED),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: originalTime > 0
+                                ? timeLeft / originalTime
+                                : 0,
+                            backgroundColor: isDarkMode
+                                ? const Color(0xFF1E2A3E)
+                                : const Color(0xFFE2E8F0),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                                Color(0xFF7C3AED)),
+                            minHeight: 6,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: isRunning
+                                    ? onPauseTimer
+                                    : onStartTimer,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF7C3AED)
+                                      .withValues(alpha: 0.2),
+                                  foregroundColor: const Color(0xFF7C3AED),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                icon: Icon(
+                                  isRunning
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  isRunning ? 'Duraklat' : 'Başlat',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: onStopTimer,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDarkMode
+                                    ? const Color(0xFF1E2A3E)
+                                    : const Color(0xFFE2E8F0),
+                                foregroundColor: const Color(0xFFEF4444),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: const Text(
+                                '✕ İptal',
+                                style: TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
         ],
-      ),
+      ),  // Column
         ),   // AnimatedContainer
       ),     // InkWell
       ),     // Material
-    );       // Theme
+      ),     // Theme
+    );       // Dismissible
   }
 }
 
@@ -1991,7 +2602,7 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
     return Container(
       constraints: BoxConstraints(maxHeight: maxH),
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        color: isDarkMode ? const Color(0xFF141B2D) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
@@ -2110,13 +2721,13 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
                               _fmtDuration(_position),
                               style: GoogleFonts.inter(
                                   fontSize: 11,
-                                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                  color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B)),
                             ),
                             Text(
                               _fmtDuration(_duration),
                               style: GoogleFonts.inter(
                                   fontSize: 11,
-                                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                  color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B)),
                             ),
                           ],
                         ),
@@ -2128,7 +2739,7 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
                           _isLoadingAudio ? 'İndiriliyor…' : 'Sesi Dinle',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
                           ),
                         ),
                       ),
@@ -2188,7 +2799,7 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
                           widget.dateLabel,
                           style: GoogleFonts.inter(
                             fontSize: 11.5,
-                            color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -2210,7 +2821,7 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
                       child: Container(
                         height: 40,
                         decoration: BoxDecoration(
-                          color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFF8FAFC),
+                          color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: _query.isNotEmpty
@@ -2319,7 +2930,7 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
             ],
 
             const SizedBox(height: 8),
-            Divider(height: 1, thickness: 1, color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
+            Divider(height: 1, thickness: 1, color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFF1F5F9)),
 
             // ── Sekme başlıkları ───────────────────────────────────────────
             TabBar(
@@ -2445,14 +3056,14 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
                               children: <Widget>[
                                 Icon(Icons.edit_note_rounded,
                                     size: 15,
-                                    color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                    color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B)),
                                 const SizedBox(width: 6),
                                 Text(
                                   'Kendi Notum',
                                   style: GoogleFonts.inter(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                    color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
                                   ),
                                 ),
                               ],
@@ -2474,7 +3085,7 @@ class _RecordDetailSheetState extends State<_RecordDetailSheet>
                                 hintText: 'Buraya notunuzu yazın…',
                                 hintStyle: GoogleFonts.inter(
                                   fontSize: 14,
-                                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFFCBD5E1),
+                                  color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFFCBD5E1),
                                 ),
                                 filled: true,
                                 fillColor: const Color(0xFFF8FAFC),
@@ -2626,7 +3237,7 @@ class _SheetContainer extends StatelessWidget {
     final bool isDarkMode = context.watch<AppState>().isDarkMode;
     return Container(
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        color: isDarkMode ? const Color(0xFF141B2D) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
@@ -2662,7 +3273,7 @@ class _FabOptionTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF334155).withValues(alpha: 0.5) : iconBg.withValues(alpha: 0.5),
+          color: isDarkMode ? const Color(0xFF1E2A3E).withValues(alpha: 0.5) : iconBg.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isDarkMode ? const Color(0xFF475569) : iconBg),
         ),
@@ -2694,7 +3305,7 @@ class _FabOptionTile extends StatelessWidget {
                     subtitle,
                     style: GoogleFonts.inter(
                       fontSize: 11,
-                      color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -2733,10 +3344,10 @@ class _Header extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        color: isDarkMode ? const Color(0xFF141B2D) : Colors.white,
         border: Border(
           bottom: BorderSide(
-            color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFE2E8F0),
           ),
         ),
       ),
@@ -2752,7 +3363,7 @@ class _Header extends StatelessWidget {
                   'İyi Günler,',
                   style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1.1,
                   ),
@@ -2772,6 +3383,105 @@ class _Header extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          Builder(builder: (BuildContext ctx) {
+            final List<_TaskItem> tasks =
+                ctx.watch<AppState>().tasks;
+            final String today =
+                DateTime.now().toIso8601String().substring(0, 10);
+            final List<_TaskItem> todayTasks = tasks
+                .where((_TaskItem t) =>
+                    t.dueDate != null &&
+                    t.dueDate.toString().substring(0, 10) == today)
+                .toList();
+            final int doneTasks = todayTasks
+                .where((_TaskItem t) => t.status == 'done')
+                .length;
+            final int total = todayTasks.length;
+
+            if (total == 0) return const SizedBox.shrink();
+
+            final double progress = doneTasks / total;
+
+            return Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDarkMode
+                    ? const Color(0xFF141B2D)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDarkMode
+                      ? const Color(0xFF1E2A3E)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Stack(
+                      children: <Widget>[
+                        CircularProgressIndicator(
+                          value: progress,
+                          backgroundColor: isDarkMode
+                              ? const Color(0xFF1E2A3E)
+                              : const Color(0xFFE2E8F0),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            progress == 1.0
+                                ? const Color(0xFF22C55E)
+                                : const Color(0xFF3B82F6),
+                          ),
+                          strokeWidth: 3.5,
+                        ),
+                        Center(
+                          child: Text(
+                            '$doneTasks',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: progress == 1.0
+                                  ? const Color(0xFF22C55E)
+                                  : const Color(0xFF3B82F6),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        '$doneTasks/$total',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: isDarkMode
+                              ? const Color(0xFFF1F5F9)
+                              : const Color(0xFF1E293B),
+                        ),
+                      ),
+                      Text(
+                        'Bugün',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDarkMode
+                              ? const Color(0xFF64748B)
+                              : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
           Row(
             children: <Widget>[
               // ── Bildirim çanı ───────────────────────────────────────────
@@ -2834,12 +3544,12 @@ class _Header extends StatelessWidget {
                     height: 36,
                     decoration: BoxDecoration(
                       color: state.isDarkMode
-                          ? const Color(0xFF1E293B)
+                          ? const Color(0xFF141B2D)
                           : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: state.isDarkMode
-                            ? const Color(0xFF334155)
+                            ? const Color(0xFF1E2A3E)
                             : const Color(0xFFE2E8F0),
                       ),
                     ),
@@ -2963,10 +3673,10 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        color: isDarkMode ? const Color(0xFF141B2D) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+          color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFF1F5F9),
         ),
         boxShadow: const <BoxShadow>[
           BoxShadow(
@@ -3013,7 +3723,7 @@ class _StatChip extends StatelessWidget {
             style: GoogleFonts.inter(
               fontSize: 9.5,
               fontWeight: FontWeight.w600,
-              color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              color: isDarkMode ? const Color(0xFF64748B) : const Color(0xFF64748B),
               letterSpacing: 0.3,
             ),
           ),
@@ -3038,10 +3748,10 @@ class _QuickActionCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          color: isDarkMode ? const Color(0xFF141B2D) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFE2E8F0),
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
@@ -3155,7 +3865,7 @@ class _CategorySection extends StatelessWidget {
         return Container(
           constraints: BoxConstraints(maxHeight: maxH),
           decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+            color: isDarkMode ? const Color(0xFF141B2D) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SafeArea(
@@ -4067,10 +4777,10 @@ class _DynamicRecordCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFF8FAFC),
+          color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Row(
@@ -4220,46 +4930,64 @@ class _BottomNavBar extends StatelessWidget {
       height: 84,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 22),
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        color: isDarkMode ? const Color(0xFF0D1321) : Colors.white,
         border: Border(
           top: BorderSide(
-            color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            color: isDarkMode ? const Color(0xFF1E2A3E) : const Color(0xFFE2E8F0),
           ),
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
-          _NavItem(
-            label: 'Ana Sayfa',
-            icon: Icons.home_rounded,
-            selected: selectedIndex == 0,
-            onTap: () => onTap(0),
+          Expanded(
+            child: _NavItem(
+              label: 'Ana Sayfa',
+              icon: Icons.home_rounded,
+              selected: selectedIndex == 0,
+              onTap: () => onTap(0),
+            ),
           ),
-          _NavItem(
-            label: 'Aksiyonlar',
-            icon: Icons.bolt_rounded,
-            selected: selectedIndex == 1,
-            onTap: () => onTap(1),
+          Expanded(
+            child: _NavItem(
+              label: 'Aksiyonlar',
+              icon: Icons.bolt_rounded,
+              selected: selectedIndex == 1,
+              onTap: () => onTap(1),
+            ),
           ),
-          const SizedBox(width: 64), // FAB için boşluk
-          _NavItem(
-            label: 'Takvim',
-            icon: Icons.calendar_month_rounded,
-            selected: selectedIndex == 2,
-            onTap: () => onTap(2),
+          const SizedBox(width: 64),
+          Expanded(
+            child: _NavItem(
+              label: 'Takvim',
+              icon: Icons.calendar_month_rounded,
+              selected: selectedIndex == 2,
+              onTap: () => onTap(2),
+            ),
           ),
-          _NavItem(
-            label: 'Kayıtlar',
-            icon: Icons.folder_open_rounded,
-            selected: selectedIndex == 3,
-            onTap: () => onTap(3),
+          Expanded(
+            child: _NavItem(
+              label: 'Kayıtlar',
+              icon: Icons.folder_open_rounded,
+              selected: selectedIndex == 3,
+              onTap: () => onTap(3),
+            ),
           ),
-          _NavItem(
-            label: 'Profil',
-            icon: Icons.person_outline_rounded,
-            selected: false,
-            onTap: () => onTap(4),
+          Expanded(
+            child: _NavItem(
+              label: 'Başarımlar',
+              icon: Icons.emoji_events_rounded,
+              selected: selectedIndex == 4,
+              onTap: () => onTap(4),
+            ),
+          ),
+          Expanded(
+            child: _NavItem(
+              label: 'Profil',
+              icon: Icons.person_outline_rounded,
+              selected: false,
+              onTap: () => onTap(5),
+            ),
           ),
         ],
       ),
@@ -4282,8 +5010,10 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color =
-        selected ? const Color(0xFF2563EB) : const Color(0xFF94A3B8);
+    final bool isDarkMode = context.watch<AppState>().isDarkMode;
+    final Color color = selected
+        ? (isDarkMode ? const Color(0xFF3B82F6) : const Color(0xFF2563EB))
+        : (isDarkMode ? const Color(0xFF475569) : const Color(0xFF94A3B8));
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
@@ -4305,6 +5035,917 @@ class _NavItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Başarımlar / İstatistikler Sayfası ──────────────────────────────────────
+class _StatsPage extends StatefulWidget {
+  final bool isDarkMode;
+  final List<dynamic> records;
+  final List<dynamic> tasks;
+  const _StatsPage({
+    required this.isDarkMode,
+    required this.records,
+    required this.tasks,
+  });
+
+  @override
+  State<_StatsPage> createState() => _StatsPageState();
+}
+
+class _StatsPageState extends State<_StatsPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  int get _totalXP {
+    int xp = 0;
+    for (final Map<String, dynamic> a in _achievements) {
+      if (a['check'](widget.records, widget.tasks) as bool) {
+        xp += a['xp'] as int;
+      }
+    }
+    return xp;
+  }
+
+  int get _maxXP =>
+      _achievements.fold(0, (int s, a) => s + (a['xp'] as int));
+  int get _level => _totalXP < 200
+      ? 1
+      : _totalXP < 500
+          ? 2
+          : _totalXP < 1000
+              ? 3
+              : _totalXP < 2000
+                  ? 4
+                  : 5;
+  String get _levelName =>
+      <String>['', 'Acemi', 'Meraklı', 'Avcı', 'Usta', 'Efsane'][_level];
+
+  List<Map<String, dynamic>> get _achievements =>
+      <Map<String, dynamic>>[
+        {
+          'id': 'first_record',
+          'icon': Icons.mic_rounded,
+          'name': 'İlk Adım',
+          'desc': 'İlk ses kaydını yükle',
+          'rarity': 'bronze',
+          'xp': 50,
+          'check': (List r, List t) => r.isNotEmpty,
+          'progress': (List r, List t) =>
+              {'current': r.length.clamp(0, 1), 'total': 1},
+        },
+        {
+          'id': 'three_records',
+          'icon': Icons.library_books_rounded,
+          'name': 'Düzenli Öğrenci',
+          'desc': '3 ses kaydı yükle',
+          'rarity': 'bronze',
+          'xp': 100,
+          'check': (List r, List t) => r.length >= 3,
+          'progress': (List r, List t) =>
+              {'current': r.length.clamp(0, 3), 'total': 3},
+        },
+        {
+          'id': 'ten_records',
+          'icon': Icons.workspace_premium_rounded,
+          'name': 'Arşivci',
+          'desc': '10 ses kaydı yükle',
+          'rarity': 'silver',
+          'xp': 250,
+          'check': (List r, List t) => r.length >= 10,
+          'progress': (List r, List t) =>
+              {'current': r.length.clamp(0, 10), 'total': 10},
+        },
+        {
+          'id': 'first_task',
+          'icon': Icons.check_circle_rounded,
+          'name': 'İlk Tamamlama',
+          'desc': 'İlk aksiyonu tamamla',
+          'rarity': 'bronze',
+          'xp': 75,
+          'check': (List r, List t) => t.any((x) => x.status == "done"),
+          'progress': (List r, List t) => {
+            'current':
+                t.where((x) => x.status == "done").length.clamp(0, 1),
+            'total': 1,
+          },
+        },
+        {
+          'id': 'five_tasks',
+          'icon': Icons.bolt_rounded,
+          'name': 'Momentum',
+          'desc': '5 aksiyon tamamla',
+          'rarity': 'silver',
+          'xp': 200,
+          'check': (List r, List t) =>
+              t.where((x) => x.status == "done").length >= 5,
+          'progress': (List r, List t) => {
+            'current':
+                t.where((x) => x.status == "done").length.clamp(0, 5),
+            'total': 5,
+          },
+        },
+        {
+          'id': 'twenty_tasks',
+          'icon': Icons.military_tech_rounded,
+          'name': 'Aksiyon Makinesi',
+          'desc': '20 aksiyon tamamla',
+          'rarity': 'gold',
+          'xp': 400,
+          'check': (List r, List t) =>
+              t.where((x) => x.status == "done").length >= 20,
+          'progress': (List r, List t) => {
+            'current':
+                t.where((x) => x.status == "done").length.clamp(0, 20),
+            'total': 20,
+          },
+        },
+        {
+          'id': 'zero_tolerance',
+          'icon': Icons.shield_rounded,
+          'name': 'Sıfır Tolerans',
+          'desc': 'Tüm aksiyonları tamamla',
+          'rarity': 'gold',
+          'xp': 350,
+          'check': (List r, List t) =>
+              t.isNotEmpty && t.every((x) => x.status == "done"),
+          'progress': (List r, List t) => {
+            'current': t.where((x) => x.status == "done").length,
+            'total': t.isNotEmpty ? t.length : 1,
+          },
+        },
+        {
+          'id': 'night_owl',
+          'icon': Icons.nightlight_rounded,
+          'name': 'Gece Mesaisi',
+          'desc': 'Gece 00:00-05:00 arası kayıt yükle',
+          'rarity': 'epic',
+          'xp': 300,
+          'check': (List r, List t) => r.any((rec) {
+            if (rec.createdAt == null) return false;
+            final int h = (rec.createdAt as DateTime).hour;
+            return h >= 0 && h < 5;
+          }),
+          'progress': (List r, List t) {
+            final bool done = r.any((rec) {
+              if (rec.createdAt == null) return false;
+              final int h = (rec.createdAt as DateTime).hour;
+              return h >= 0 && h < 5;
+            });
+            return {'current': done ? 1 : 0, 'total': 1};
+          },
+        },
+        {
+          'id': 'marathon',
+          'icon': Icons.local_fire_department_rounded,
+          'name': 'Maraton',
+          'desc': '2000+ kelime transkript oluştur',
+          'rarity': 'epic',
+          'xp': 400,
+          'check': (List r, List t) => r.any((rec) =>
+              rec.transcript != null &&
+              (rec.transcript as String).split(' ').length >= 2000),
+          'progress': (List r, List t) {
+            final int maxWords = r.fold(0, (int mx, rec) {
+              if (rec.transcript == null) return mx;
+              final int w =
+                  (rec.transcript as String).split(' ').length;
+              return w > mx ? w : mx;
+            });
+            return {'current': maxWords.clamp(0, 2000), 'total': 2000};
+          },
+        },
+        {
+          'id': 'speed_clear',
+          'icon': Icons.flash_on_rounded,
+          'name': 'Hız Makinesi',
+          'desc': 'Aynı gün 5 aksiyon tamamla',
+          'rarity': 'legendary',
+          'xp': 1000,
+          'check': (List r, List t) {
+            final String today =
+                DateTime.now().toIso8601String().substring(0, 10);
+            return t
+                    .where((x) =>
+                        x.status == "done" &&
+                        x.dueDate != null &&
+                        x.dueDate.toString().substring(0, 10) == today)
+                    .length >=
+                5;
+          },
+          'progress': (List r, List t) {
+            final String today =
+                DateTime.now().toIso8601String().substring(0, 10);
+            final int count = t
+                .where((x) =>
+                    x.status == "done" &&
+                    x.dueDate != null &&
+                    x.dueDate.toString().substring(0, 10) == today)
+                .length;
+            return {'current': count.clamp(0, 5), 'total': 5};
+          },
+        },
+      ];
+
+  List<Map<String, dynamic>> get _dailyQuests {
+    final String today =
+        DateTime.now().toIso8601String().substring(0, 10);
+    final List<dynamic> todayTasks = widget.tasks
+        .where((t) =>
+            t.dueDate != null &&
+            t.dueDate.toString().substring(0, 10) == today)
+        .toList();
+    final List<dynamic> todayDone =
+        todayTasks.where((t) => t.status == "done").toList();
+    final List<dynamic> todayRecords = widget.records
+        .where((r) =>
+            r.createdAt != null &&
+            (r.createdAt as DateTime)
+                    .toIso8601String()
+                    .substring(0, 10) ==
+                today)
+        .toList();
+
+    return <Map<String, dynamic>>[
+      {
+        'id': 'daily_login',
+        'icon': Icons.star_rounded,
+        'name': 'Günlük Giriş',
+        'desc': 'Uygulamayı açtın!',
+        'xp': 10,
+        'color': const Color(0xFF22C55E),
+        'done': true,
+        'current': 1,
+        'total': 1,
+      },
+      {
+        'id': 'daily_record',
+        'icon': Icons.mic_rounded,
+        'name': 'Ses Kaydı',
+        'desc': 'Bugün en az 1 ses kaydı yükle',
+        'xp': 50,
+        'color': const Color(0xFF3B82F6),
+        'done': todayRecords.isNotEmpty,
+        'current': todayRecords.length.clamp(0, 1),
+        'total': 1,
+      },
+      {
+        'id': 'daily_task',
+        'icon': Icons.bolt_rounded,
+        'name': 'Aksiyon Tamamla',
+        'desc': 'Bugün en az 1 aksiyon tamamla',
+        'xp': 30,
+        'color': const Color(0xFFF97316),
+        'done': todayDone.isNotEmpty,
+        'current': todayDone.length.clamp(0, 1),
+        'total': 1,
+      },
+      {
+        'id': 'daily_clear',
+        'icon': Icons.flag_rounded,
+        'name': 'Günü Temizle',
+        'desc': todayTasks.isEmpty
+            ? 'Bugün için planlanmış aksiyon yok'
+            : 'Bugünkü ${todayTasks.length} aksiyonu tamamla',
+        'xp': todayTasks.isEmpty ? 0 : 100,
+        'color': const Color(0xFF8B5CF6),
+        'done': todayTasks.isNotEmpty &&
+            todayDone.length == todayTasks.length,
+        'current': todayDone.length,
+        'total': todayTasks.isEmpty ? 1 : todayTasks.length,
+      },
+    ];
+  }
+
+  Color _rarityColor(String rarity) {
+    switch (rarity) {
+      case 'bronze':
+        return const Color(0xFFB45309);
+      case 'silver':
+        return const Color(0xFF94A3B8);
+      case 'gold':
+        return const Color(0xFFF59E0B);
+      case 'epic':
+        return const Color(0xFF8B5CF6);
+      case 'legendary':
+        return const Color(0xFFF97316);
+      default:
+        return const Color(0xFF94A3B8);
+    }
+  }
+
+  String _rarityLabel(String rarity) {
+    switch (rarity) {
+      case 'bronze':
+        return 'Bronz';
+      case 'silver':
+        return 'Gümüş';
+      case 'gold':
+        return 'Altın';
+      case 'epic':
+        return 'Epik';
+      case 'legendary':
+        return 'Efsanevi';
+      default:
+        return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = widget.isDarkMode;
+    final Color bg =
+        isDark ? const Color(0xFF0A0F1E) : const Color(0xFFF8FAFC);
+    final Color card = isDark ? const Color(0xFF141B2D) : Colors.white;
+    final Color border =
+        isDark ? const Color(0xFF1E2A3E) : const Color(0xFFE2E8F0);
+    final Color textPrimary =
+        isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B);
+    final Color textSecondary =
+        isDark ? const Color(0xFF64748B) : const Color(0xFF64748B);
+
+    final int unlockedCount = _achievements
+        .where((a) =>
+            a['check'](widget.records, widget.tasks) as bool)
+        .length;
+    final double xpPercent = _maxXP > 0 ? _totalXP / _maxXP : 0.0;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            // Profil kartı
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: border),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: Column(
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Stack(
+                        children: <Widget>[
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: <Color>[
+                                  Color(0xFF3B82F6),
+                                  Color(0xFF6366F1),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'U',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: -2,
+                            right: -2,
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: <Color>[
+                                    Color(0xFFF59E0B),
+                                    Color(0xFFF97316),
+                                  ],
+                                ),
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: bg, width: 2),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '$_level',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Seviye $_level — $_levelName',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF6366F1),
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$_totalXP / $_maxXP XP',
+                              style: TextStyle(
+                                  fontSize: 12, color: textSecondary),
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: xpPercent,
+                                backgroundColor: border,
+                                valueColor:
+                                    const AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF6366F1),
+                                ),
+                                minHeight: 6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        children: <Widget>[
+                          Text(
+                            '$unlockedCount',
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFFF59E0B),
+                            ),
+                          ),
+                          Text(
+                            '/ ${_achievements.length}',
+                            style: TextStyle(
+                                fontSize: 11, color: textSecondary),
+                          ),
+                          Text(
+                            'Başarım',
+                            style: TextStyle(
+                                fontSize: 10, color: textSecondary),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: <Widget>[
+                      Expanded(child: _AchievChip(icon: Icons.mic_rounded, label: 'Kayıt', value: '${widget.records.length}', color: const Color(0xFF3B82F6), isDark: isDark)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _AchievChip(icon: Icons.bolt_rounded, label: 'Aksiyon', value: '${widget.tasks.length}', color: const Color(0xFFF97316), isDark: isDark)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _AchievChip(icon: Icons.check_circle_rounded, label: 'Biten', value: '${widget.tasks.where((t) => t.status == "done").length}', color: const Color(0xFF22C55E), isDark: isDark)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Tab bar
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: card,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: border),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: const Color(0xFF3B82F6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: textSecondary,
+                labelStyle: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700),
+                tabs: const <Tab>[
+                  Tab(text: '🔥 Günlük Görevler'),
+                  Tab(text: '🏆 Başarımlar'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Tab içeriği
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: <Widget>[
+                  // Günlük görevler
+                  ListView(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16),
+                    children: _dailyQuests
+                        .map((Map<String, dynamic> q) {
+                      final double pct = q['total'] as int > 0
+                          ? (q['current'] as int) /
+                              (q['total'] as int)
+                          : 0.0;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: q['done'] as bool
+                              ? const Color(0xFF22C55E)
+                                  .withValues(alpha: 0.1)
+                              : card,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: q['done'] as bool
+                                ? const Color(0xFF22C55E)
+                                    .withValues(alpha: 0.3)
+                                : border,
+                          ),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: (q['done'] as bool
+                                        ? const Color(0xFF22C55E)
+                                        : q['color'] as Color)
+                                    .withValues(alpha: 0.15),
+                                borderRadius:
+                                    BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                q['done'] as bool
+                                    ? Icons.check_circle_rounded
+                                    : q['icon'] as IconData,
+                                color: q['done'] as bool
+                                    ? const Color(0xFF22C55E)
+                                    : q['color'] as Color,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: Text(
+                                          q['name'] as String,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight:
+                                                FontWeight.w700,
+                                            color: q['done'] as bool
+                                                ? const Color(
+                                                    0xFF22C55E)
+                                                : textPrimary,
+                                            decoration:
+                                                q['done'] as bool
+                                                    ? TextDecoration
+                                                        .lineThrough
+                                                    : null,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: q['done'] as bool
+                                              ? const Color(0xFF22C55E)
+                                                  .withValues(
+                                                      alpha: 0.15)
+                                              : const Color(0xFFF59E0B)
+                                                  .withValues(
+                                                      alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          '+${q['xp']} XP',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: q['done'] as bool
+                                                ? const Color(
+                                                    0xFF22C55E)
+                                                : const Color(
+                                                    0xFFF59E0B),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    q['desc'] as String,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: textSecondary),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius:
+                                        BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: pct,
+                                      backgroundColor: border,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
+                                        q['done'] as bool
+                                            ? const Color(0xFF22C55E)
+                                            : q['color'] as Color,
+                                      ),
+                                      minHeight: 4,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${q['current']}/${q['total']}',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        color: textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
+                  // Başarımlar grid
+                  GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemCount: _achievements.length,
+                    itemBuilder: (BuildContext context, int i) {
+                      final Map<String, dynamic> a = _achievements[i];
+                      final bool unlocked = a['check'](
+                              widget.records, widget.tasks)
+                          as bool;
+                      final Map<dynamic, dynamic> prog =
+                          a['progress'](widget.records, widget.tasks)
+                              as Map;
+                      final double pct =
+                          (prog['total'] as int) > 0
+                              ? (prog['current'] as int) /
+                                  (prog['total'] as int)
+                              : 0.0;
+                      final Color rarityColor =
+                          _rarityColor(a['rarity'] as String);
+
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: unlocked
+                              ? rarityColor.withValues(alpha: 0.08)
+                              : card,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: unlocked
+                                ? rarityColor.withValues(alpha: 0.5)
+                                : border,
+                            width: unlocked ? 1.5 : 1,
+                          ),
+                          boxShadow: unlocked
+                              ? <BoxShadow>[
+                                  BoxShadow(
+                                    color: rarityColor
+                                        .withValues(alpha: 0.2),
+                                    blurRadius: 12,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                Icon(
+                                  a['icon'] as IconData,
+                                  size: 24,
+                                  color: unlocked
+                                      ? rarityColor
+                                      : textSecondary
+                                          .withValues(alpha: 0.4),
+                                ),
+                                const Spacer(),
+                                unlocked
+                                    ? const Icon(
+                                        Icons.star_rounded,
+                                        size: 14,
+                                        color: Color(0xFFF59E0B),
+                                      )
+                                    : Icon(
+                                        Icons.lock_rounded,
+                                        size: 12,
+                                        color: textSecondary
+                                            .withValues(alpha: 0.4),
+                                      ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: unlocked
+                                    ? rarityColor
+                                        .withValues(alpha: 0.15)
+                                    : border.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                _rarityLabel(a['rarity'] as String),
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: unlocked
+                                      ? rarityColor
+                                      : textSecondary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              a['name'] as String,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: unlocked
+                                    ? textPrimary
+                                    : textSecondary
+                                        .withValues(alpha: 0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Expanded(
+                              child: Text(
+                                a['desc'] as String,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: unlocked
+                                      ? textSecondary
+                                      : textSecondary
+                                          .withValues(alpha: 0.4),
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                value: pct,
+                                backgroundColor: border,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(
+                                  unlocked
+                                      ? rarityColor
+                                      : textSecondary
+                                          .withValues(alpha: 0.3),
+                                ),
+                                minHeight: 3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: <Widget>[
+                                Text(
+                                  '${prog['current']}/${prog['total']}',
+                                  style: TextStyle(
+                                      fontSize: 9,
+                                      color: textSecondary),
+                                ),
+                                if (unlocked)
+                                  Text(
+                                    '+${a['xp']} XP',
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFFF59E0B),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Achiev Chip (_StatsPage için) ───────────────────────────────────────────
+class _AchievChip extends StatelessWidget {
+  const _AchievChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.isDark,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: <Widget>[
+          Icon(icon, size: 16, color: color),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: isDark
+                  ? const Color(0xFF64748B)
+                  : const Color(0xFF64748B),
+            ),
+          ),
+        ],
+        ),
     );
   }
 }
